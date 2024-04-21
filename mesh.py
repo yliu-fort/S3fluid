@@ -1,8 +1,5 @@
 import numpy as np
-from scipy.spatial import Delaunay, minkowski_distance
-import meshio
-from icosphere import icosphere
-from scipy.sparse import coo_array, csc_matrix
+from scipy.sparse import coo_array
 import scipy.sparse.linalg as spla
 from geometry import *
 
@@ -25,10 +22,10 @@ class Mesh(object):
         self.point_normals = point_normals
         self.simplices = simplices
 
-    def interpolate_field_cell_to_face(phi):
-        return self.edge_weighing_factor[:, np.newaxis] * phi[self.owners] + \
+    def interpolate_field_cell_to_face(self, phi):
+        return self.edge_weighing_factor[:, np.newaxis] * phi[self.owners,...] + \
                  np.where(self.neighbours != -1,\
-                (1.0 - self.edge_weighing_factor[:, np.newaxis]) * phi[self.neighbours],np.zeros_like(phi[self.owners]))
+                (1.0 - self.edge_weighing_factor[:, np.newaxis]) * phi[self.neighbours,...],np.zeros_like(phi[self.owners,...]))
 
     def reconstruct_surface_gradient(self, phi, n_skewness_corr_iter=1):
         # Init dphi_f
@@ -176,6 +173,15 @@ class Mesh(object):
 
         return Iv
 
+    def divergence(self, uf):
+        div = np.zeros((len(self.areas),))
+        for fi, normal, center, sf, owner, neighbour in zip(uf, self.edge_normals, self.edge_centers, self.edge_lengths, self.owners, self.neighbours):
+            direction = 1 if np.dot(center - self.barycenters[owner], normal) > 0 else -1
+            div[owner] += fi * sf * direction
+            if neighbour != -1:
+                div[neighbour] -= fi * sf * direction
+        return div
+
     def helmholtz_projection(self, mass_flow_rate, sngrad_corr=False):
         # Estimate phi_f
         #rhou_f = self.edge_weighing_factor[:, np.newaxis] * rhou[self.owners] + \
@@ -211,7 +217,7 @@ class Mesh(object):
 
         Jf = coo_array((data, (row, col)), shape=(len(self.areas), len(self.areas)))
 
-        phi = spla.gmres(Jf, rhs, tol=1e-7)[0]
+        phi = spla.gmres(Jf, rhs, tol=1e-6)[0]
 
         if sngrad_corr:
             dphi_f, _ = self.reconstruct_surface_gradient(phi)
@@ -230,11 +236,8 @@ class Mesh(object):
         # Reconstruct surface normal gradient
         new_mass_flow_rate = mass_flow_rate + dphi_fn
 
-        div = np.zeros((len(self.areas),))
-        for dphi_fi, normal, center, sf, owner, neighbour in zip(new_mass_flow_rate, self.edge_normals, self.edge_centers, self.edge_lengths, self.owners, self.neighbours):
-            direction = 1 if np.dot(center - self.barycenters[owner], normal) > 0 else -1
-            div[owner] += dphi_fi * sf * direction
-            if neighbour != -1:
-                div[neighbour] -= dphi_fi * sf * direction
+        _, dphi = self.reconstruct_surface_gradient(phi)
+        for cell_idx in range(len(self.areas)):
+            dphi[cell_idx,:] = project_vector_to_plane(dphi[cell_idx,:],self.barynormals[cell_idx,:])
 
-        return new_mass_flow_rate, div
+        return new_mass_flow_rate, dphi
