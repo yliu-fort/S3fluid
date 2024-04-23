@@ -2,6 +2,10 @@
 import numpy as np
 from scipy.spatial import minkowski_distance
 
+def normalize(v):
+    # Normalize the normal vector
+    return v / np.linalg.norm(v)
+
 def get_barycenters(points, simplices):
     return np.array([np.mean(points[simplice],axis=0) for simplice in simplices])
 
@@ -26,7 +30,16 @@ def get_edge_connectivities(simplices):
         edges_to_vertices.append(edge)
         owners.append(_simplices[0])
         neighbours.append(-1 if len(_simplices) == 1 else _simplices[1] )
-    return owners, neighbours, edges_to_vertices
+    return np.array(owners), np.array(neighbours), edges_to_vertices
+
+def get_cell_connectivities_to_edge(owners, neighbours, ncells):
+    # Generate edge list and edge owner & neighbor list
+    cells_to_edges = [[] for _ in range(ncells)]
+    for face_idx, owner, neighbour in zip(range(len(owners)), owners, neighbours):
+        cells_to_edges[owner].append(face_idx)
+        cells_to_edges[neighbour].append(face_idx)
+        
+    return cells_to_edges
 
 def get_edge_lengths(points, edges_to_vertices):
     # Compute edge length (face area), edge (face) center and centroid of edges (faces)
@@ -66,7 +79,7 @@ def get_areas(points, simplices):
             return area
 
     # Calculate the area for each simplex
-    return [area_of_polygon(points, simplex) for simplex in simplices]
+    return np.array([area_of_polygon(points, simplex) for simplex in simplices])
 
 def get_edge_weight_factors(points, point_normals, barycenters, owners, neighbours, edges_to_vertices):
     # Edge (Face) weighing factor
@@ -162,7 +175,7 @@ def project_vector_to_plane(v, n):
         raise ValueError("The normal vector n must not be the zero vector.")
 
     # Normalize the normal vector to avoid division by a very small number
-    n_norm = n / np.linalg.norm(n)
+    n_norm = normalize(n)
     
     # Calculate the dot product of v and n
     dot_product = np.dot(v, n_norm)
@@ -174,3 +187,13 @@ def project_vector_to_plane(v, n):
     projection_on_plane = v - projection_v_on_n
     
     return projection_on_plane
+
+def project_vectors_to_planes(v, n, rotate=False):    
+    # Calculate the projection of v onto the plane
+    if rotate:
+        vv = np.sum(v * v, axis=1, keepdims=True)
+        projected_v = v - np.sum(v*n, axis=1,keepdims=True) * n
+        projected_vv = np.sum(projected_v * projected_v, axis=1, keepdims=True)
+        return projected_v / projected_vv * vv
+    else:
+        return v - np.sum(v*n, axis=1,keepdims=True) * n

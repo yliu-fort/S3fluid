@@ -5,7 +5,7 @@ import meshio
 from icosphere import icosphere
 from mesh import Mesh
 
-points, simplices = icosphere(30)
+points, simplices = icosphere(120)
 point_normals = points / np.linalg.norm(points,axis=-1,keepdims=True)
 mesh = Mesh(points, simplices, point_normals)
 
@@ -31,16 +31,15 @@ mesh0.write(
     # file_format="vtk",  # optional if first argument is a path; inferred from extension
 )
 
-J_diff,rhs_diff = mesh.diffusion_matrix(u, gamma)
-
 # %%
-with meshio.xdmf.TimeSeriesWriter("results/wave_test.xdmf") as writer:
+with meshio.xdmf.TimeSeriesWriter("wave_test.xdmf") as writer:
     writer.write_points_cells(points, [("triangle", simplices),])
-    for t in range(501):
+    for t in range(1000+1):
         # Solve
         dt = 0.01
-        v = v - dt*J_diff@u/mesh.areas
+        J_diff, rhs_diff = mesh.diffusion_matrix(u, gamma)
+        v = v - dt*(J_diff@u - rhs_diff)/mesh.areas
         u = u + dt*v
-        print(t)
+        print(t*dt)
         if t % 10 == 0:
-            writer.write_data(t, cell_data={"u": [u],"v": [v],"c": [np.sqrt(gamma)]})
+            writer.write_data(t*dt, cell_data={"u": [u],"v": [v],"c": [np.sqrt(gamma)]})
