@@ -5,15 +5,15 @@ import meshio
 from icosphere import icosphere
 from mesh import Mesh
 
-points, simplices = icosphere(120)
+points, simplices = icosphere(30)
 point_normals = points / np.linalg.norm(points,axis=-1,keepdims=True)
 mesh = Mesh(points, simplices, point_normals)
 
 # %% Init
 # \phi = x^2 + y^2 + (xy)^2
-xc = mesh.barycenters[:,0]
-yc = mesh.barycenters[:,1]
-zc = mesh.barycenters[:,2]
+xc = mesh.barycenters[0]
+yc = mesh.barycenters[1]
+zc = mesh.barycenters[2]
 #u = (xc**2 + yc**2 + zc**2 + (xc*yc*zc)**2)
 gamma = 0.1+0.5*(1+np.tanh(5*(1-(xc*yc*zc)**2*27*2)))
 u = 1.0/np.cosh(100*(xc - 1.0))

@@ -2,23 +2,74 @@
 import numpy as np
 from scipy.spatial import minkowski_distance
 
-def normalize(v):
-    # Normalize the normal vector
-    return v / np.linalg.norm(v)
+def normalize(vector):
+    """Normalize a vector.
+
+    Args:
+        vector (np.ndarray): A numpy array of vectors to normalize.
+
+    Returns:
+        np.ndarray: A numpy array of normalized vectors.
+
+    Raises:
+        ValueError: If the input is not a 2D numpy array or if any vector has zero length.
+    """
+    if not isinstance(vector, np.ndarray) or len(vector.shape) != 2:
+        raise ValueError("Input should be a 2D numpy array")
+    norms = np.linalg.norm(vector, axis=0)
+    if np.any(norms == 0):
+        raise ValueError("Zero length vector detected")
+    return vector / norms
 
 def get_barycenters(points, simplices):
-    return np.array([np.mean(points[simplice],axis=0) for simplice in simplices])
+    """Calculate the barycenters of simplices defined by points.
+
+    Args:
+        points (np.ndarray): An array of point coordinates.
+        simplices (list of list of int): Indices of vertices forming each simplex.
+
+    Returns:
+        np.ndarray: Coordinates of the barycenters of the simplices.
+    """
+    # Calculate the mean of points indexed by simplices
+    barycenters = np.array([np.mean(points[simplice], axis=0) for simplice in simplices])
+    return barycenters.T
 
 def get_barynormals(point_normals, simplices):
-    return np.array([np.mean(point_normals[simplice],axis=0) for simplice in simplices])
+    """Calculate the barycentric normals for given simplices.
+
+    Args:
+        point_normals (np.ndarray): An array of normals at each point.
+        simplices (list of lists): A list of simplices, where each simplex
+                                   is defined by indices into point_normals.
+
+    Returns:
+        np.ndarray: An array of the mean normals for each simplex, transposed.
+    """
+    mean_normals = [
+        np.mean(point_normals[simplex], axis=0)
+        for simplex in simplices
+    ]
+    return np.array(mean_normals).T
+
+import numpy as np
 
 def get_edge_connectivities(simplices):
-    # Generate edge list and edge owner & neighbor list
+    """Generate edge connectivities for a given set of simplices.
+
+    Args:
+        simplices (list of list of int): Each sublist represents a simplex with vertex indices.
+
+    Returns:
+        tuple: Three NumPy arrays containing owners, neighbours of edges, and the edges as vertex pairs.
+    """
+    # Dictionary to keep track of edges and their associated simplices
     edges = {}
     for simplex_index, simplex in enumerate(simplices):
-        for i in range(len(simplex)):
-            # Create sorted tuple to identify edges uniquely
-            edge = tuple(sorted((simplex[i], simplex[(i + 1) % len(simplex)])))
+        num_vertices = len(simplex)
+        for i in range(num_vertices):
+            # Create a sorted tuple to identify edges uniquely
+            edge = tuple(sorted((simplex[i], simplex[(i + 1) % num_vertices])))
             if edge not in edges:
                 edges[edge] = []
             edges[edge].append(simplex_index)
@@ -26,19 +77,35 @@ def get_edge_connectivities(simplices):
     edges_to_vertices = []
     owners = []
     neighbours = []
-    for edge, _simplices in edges.items():
+
+    # Process collected edges to determine ownership and neighboring simplices
+    for edge, linked_simplices in edges.items():
         edges_to_vertices.append(edge)
-        owners.append(_simplices[0])
-        neighbours.append(-1 if len(_simplices) == 1 else _simplices[1] )
-    return np.array(owners), np.array(neighbours), edges_to_vertices
+        owners.append(linked_simplices[0])
+        # Assign -1 if there is no neighbor simplex
+        neighbours.append(-1 if len(linked_simplices) == 1 else linked_simplices[1])
+
+    return np.array(owners), np.array(neighbours), np.array(edges_to_vertices)
 
 def get_cell_connectivities_to_edge(owners, neighbours, ncells):
-    # Generate edge list and edge owner & neighbor list
+    """Generates mappings from cells to edges based on ownership and neighborhood.
+
+    Args:
+        owners (list of int): List of indices of the owning cells for each face.
+        neighbours (list of int): List of indices of the neighboring cells for each face.
+        ncells (int): Total number of cells.
+
+    Returns:
+        list of list of int: Each cell index maps to a list of edge indices connected to it.
+    """
+    # Initialize list of lists to store edge connectivities for each cell
     cells_to_edges = [[] for _ in range(ncells)]
+    
+    # Populate the list with edges each cell is connected to
     for face_idx, owner, neighbour in zip(range(len(owners)), owners, neighbours):
         cells_to_edges[owner].append(face_idx)
         cells_to_edges[neighbour].append(face_idx)
-        
+    
     return cells_to_edges
 
 def get_edge_lengths(points, edges_to_vertices):
@@ -46,15 +113,38 @@ def get_edge_lengths(points, edges_to_vertices):
     return minkowski_distance(points[[x[0] for x in edges_to_vertices]],points[[x[1] for x in edges_to_vertices]])
 
 def get_edge_centers(points, edges_to_vertices):
-    return np.array([np.mean(np.array([points[v0] for v0 in v]),axis=0) for v in edges_to_vertices])
+    return np.array([np.mean(np.array([points[v0] for v0 in v]),axis=0) for v in edges_to_vertices]).T
 
 def get_edge_tbns(points, point_normals, edges_to_vertices):
-    # Compute edge tangent, co-tangent and normals
+    """Computes the tangent, bitangent, and normal vectors for edges.
+
+    Args:
+        points (ndarray): The coordinates of the points.
+        point_normals (ndarray): The normals at each point.
+        edges_to_vertices (list of tuple): Each tuple contains the indices of the vertices that form an edge.
+
+    Returns:
+        tuple: Three ndarrays representing the tangents, bitangents, and normals of the edges.
+    """
+    # Calculate the lengths of each edge.
     edge_lengths = get_edge_lengths(points, edges_to_vertices)
-    edge_tangents = np.array([(points[v[1]] - points[v[0]])/l for v, l in zip(edges_to_vertices, edge_lengths)])
-    edge_bitangents = np.array([np.mean(np.array([point_normals[v0] for v0 in v]),axis=0) for v in edges_to_vertices])
-    edge_normals = np.array([np.cross(t, r) for t, r in zip(edge_tangents, edge_bitangents)])
-    return edge_tangents, edge_bitangents, edge_normals
+
+    # Calculate edge tangents.
+    edge_tangents = np.array([
+        (points[v[1]] - points[v[0]]) / l for v, l in zip(edges_to_vertices, edge_lengths)
+    ])
+
+    # Calculate edge bitangents.
+    edge_bitangents = np.array([
+        np.mean(np.array([point_normals[v0] for v0 in v]), axis=0) for v in edges_to_vertices
+    ])
+
+    # Calculate edge normals.
+    edge_normals = np.array([
+        np.cross(t, r) for t, r in zip(edge_tangents, edge_bitangents)
+    ])
+
+    return edge_tangents.T, edge_bitangents.T, edge_normals.T
 
 def get_areas(points, simplices):
     def herons_formula(a, b, c):
@@ -113,8 +203,8 @@ def get_edge_weight_factors(points, point_normals, barycenters, owners, neighbou
         return distance
 
     for owner, neighbour, vertices in zip(owners, neighbours, edges_to_vertices):
-        distance_to_owner = point_to_line_distance(barycenters[owner], points[vertices[0]], points[vertices[1]])
-        distance_to_neighbour = point_to_line_distance(barycenters[neighbour], points[vertices[0]], points[vertices[1]]) \
+        distance_to_owner = point_to_line_distance(barycenters[:,owner], points[vertices[0]], points[vertices[1]])
+        distance_to_neighbour = point_to_line_distance(barycenters[:,neighbour], points[vertices[0]], points[vertices[1]]) \
             if neighbour != -1 else 0
         edge_weighing_factor.append(distance_to_owner / (distance_to_owner + distance_to_neighbour))
 
@@ -154,15 +244,15 @@ def get_skewness(points, point_normals, barycenters, owners, neighbours, edges_t
     skewness_vector = []
     edge_lengths = get_edge_lengths(points, edges_to_vertices)
     edge_centers = get_edge_centers(points, edges_to_vertices)
-    edge_tangents, edge_bitangents, edge_normals = get_edge_tbns(points, point_normals, edges_to_vertices)
-    for owner, neighbour, center, length, tangent, bitangent in zip(owners, neighbours, edge_centers, edge_lengths, edge_tangents, edge_bitangents):
-        intersection = find_intersection(barycenters[owner], barycenters[neighbour], center, tangent, bitangent) if neighbour != -1 else None
+    edge_tangents, edge_bitangents, _ = get_edge_tbns(points, point_normals, edges_to_vertices)
+    for owner, neighbour, center, length, tangent, bitangent in zip(owners, neighbours, edge_centers.T, edge_lengths, edge_tangents.T, edge_bitangents.T):
+        intersection = find_intersection(barycenters[:, owner], barycenters[:, neighbour], center, tangent, bitangent) if neighbour != -1 else None
         distance = minkowski_distance(intersection, center) if neighbour != -1 else 0
         skewness.append(2.0 * distance / length)
         skewness_vector.append(center - intersection if neighbour != -1 else center - center)
 
     skewness = np.array(skewness)
-    skewness_vector = np.array(skewness_vector)
+    skewness_vector = np.array(skewness_vector).T
     return skewness, skewness_vector
 
 def project_vector_to_plane(v, n):
@@ -191,9 +281,18 @@ def project_vector_to_plane(v, n):
 def project_vectors_to_planes(v, n, rotate=False):    
     # Calculate the projection of v onto the plane
     if rotate:
-        vv = np.sum(v * v, axis=1, keepdims=True)
-        projected_v = v - np.sum(v*n, axis=1,keepdims=True) * n
-        projected_vv = np.sum(projected_v * projected_v, axis=1, keepdims=True)
+        vv = np.sum(v * v, axis=0)
+        projected_v = v - np.sum(v * n, axis=0) * n
+        projected_vv = np.sum(projected_v * projected_v, axis=0)
         return projected_v / projected_vv * vv
     else:
-        return v - np.sum(v*n, axis=1,keepdims=True) * n
+        return v - np.sum(v * n, axis=0) * n
+    
+if __name__=="__main__":
+    np.random.seed(42)
+
+    assert normalize(np.random.rand(3,7)).shape == (3,7)
+
+    assert get_barycenters(np.array([[0, 0, 0], [0, 1, 0], [1, 0, 0], [1, 1, 0]]),[[2,3,0],[3,1,0]]).shape == (3,2)
+
+    assert np.all(project_vectors_to_planes(np.array([[1,-1],[1,-1],[1,-1]]),np.array([[0,0],[0,0],[1,1]])) == np.array([[1,-1],[1,-1],[0,0]]))
