@@ -171,11 +171,7 @@ def get_areas(points, simplices):
     # Calculate the area for each simplex
     return np.array([area_of_polygon(points, simplex) for simplex in simplices])
 
-def get_edge_weight_factors(points, point_normals, barycenters, owners, neighbours, edges_to_vertices):
-    # Edge (Face) weighing factor
-    edge_weighing_factor = []
-
-    def point_to_line_distance(point, x0, x1):
+def point_to_line_distance(point, x0, x1):
         """ Calculate the normal distance from a point to a line defined by two points (x0 and x1) in 3D,
             handling edge cases such as degenerate lines. """
         # Convert points to numpy arrays if not already
@@ -201,59 +197,52 @@ def get_edge_weight_factors(points, point_normals, barycenters, owners, neighbou
         distance = np.linalg.norm(c) / np.linalg.norm(d)
         
         return distance
+    
+def point_to_line_distances(points, x0s, x1s):
+    """ Calculate the normal distances from multiple points to multiple lines defined by two points (x0s and x1s) in 3D,
+        handling edge cases such as degenerate lines.
+        Parameters:
+            points (array): An array of shape (3, n) representing n points in 3D space.
+            x0s (array): An array of shape (3, n) representing n starting points of the lines.
+            x1s (array): An array of shape (3, n) representing n ending points of the lines.
+        Returns:
+            distances (array): An array of distances from each point to the corresponding line.
+    """
+    # Convert input arrays
+    points = np.asarray(points)
+    x0s = np.asarray(x0s)
+    x1s = np.asarray(x1s)
 
-    for owner, neighbour, vertices in zip(owners, neighbours, edges_to_vertices):
-        distance_to_owner = point_to_line_distance(barycenters[:,owner], points[vertices[0]], points[vertices[1]])
-        distance_to_neighbour = point_to_line_distance(barycenters[:,neighbour], points[vertices[0]], points[vertices[1]]) \
-            if neighbour != -1 else 0
-        edge_weighing_factor.append(distance_to_owner / (distance_to_owner + distance_to_neighbour))
+    # Calculate direction vectors of the lines
+    ds = x1s - x0s
+
+    # Check for degenerate lines where direction vectors are close to zero
+    degenerate = np.allclose(ds, 0, atol=1e-8)
+    if np.any(degenerate):
+        print("Warning: Some input points for the lines are the same. These lines are degenerate.")
+        # Handle degenerate cases by setting distance to the norm of the point difference
+        distances = np.linalg.norm(points - x0s, axis=0)
+        return distances
+
+    # Calculate vectors from x0s to points
+    ps = points - x0s
+
+    # Calculate cross products of ds and ps
+    cs = np.cross(ds, ps, axis=0)
+
+    # Calculate distances from the points to the lines (magnitude of cross product divided by magnitude of ds)
+    distances = np.linalg.norm(cs, axis=0) / np.linalg.norm(ds, axis=0)
+
+    return distances
+
+def get_edge_weight_factors(points, point_normals, barycenters, owners, neighbours, edges_to_vertices):
+    # Edge (Face) weighing factor
+    distance_to_owners = point_to_line_distances(barycenters[:,owners], points[edges_to_vertices[:,0]].T, points[edges_to_vertices[:,1]].T)
+    distance_to_neighbours = point_to_line_distances(barycenters[:,neighbours], points[edges_to_vertices[:,0]].T, points[edges_to_vertices[:,1]].T)
+    distance_to_neighbours[neighbours==-1] = 0
+    edge_weighing_factor = distance_to_owners / (distance_to_owners + distance_to_neighbours)
 
     return np.array(edge_weighing_factor)
-
-def get_skewness(points, point_normals, barycenters, owners, neighbours, edges_to_vertices):
-    # Skewness
-    def project_point_onto_plane(v, p, n):
-        n = np.array(n)
-        v = np.array(v)
-        p = np.array(p)
-        return v - np.dot(v - p, n) / np.dot(n, n) * n
-
-    def find_intersection(v1, v2, p, t, n):
-        v1_proj = project_point_onto_plane(v1, p, n)
-        v2_proj = project_point_onto_plane(v2, p, n)
-        d1 = v2_proj - v1_proj
-        t = np.array(t)
-
-        # Matrix to solve for parameters t (for the projected line) and s (for the line in the plane)
-        A = np.column_stack([d1, -t])
-        b = np.array(p) - v1_proj
-
-        # Check if the matrix A is singular (i.e., lines are parallel)
-        if np.linalg.matrix_rank(A) < 2:
-            return None  # Lines are parallel or coincident; no unique intersection
-
-        # Solve the linear system
-        params, residuals, rank, s = np.linalg.lstsq(A, b, rcond=None)
-        if residuals.size > 0 and not np.isclose(residuals, 0):
-            return None  # The lines do not intersect
-
-        intersection_point = v1_proj + params[0] * d1
-        return intersection_point
-
-    skewness = []
-    skewness_vector = []
-    edge_lengths = get_edge_lengths(points, edges_to_vertices)
-    edge_centers = get_edge_centers(points, edges_to_vertices)
-    edge_tangents, edge_bitangents, _ = get_edge_tbns(points, point_normals, edges_to_vertices)
-    for owner, neighbour, center, length, tangent, bitangent in zip(owners, neighbours, edge_centers.T, edge_lengths, edge_tangents.T, edge_bitangents.T):
-        intersection = find_intersection(barycenters[:, owner], barycenters[:, neighbour], center, tangent, bitangent) if neighbour != -1 else None
-        distance = minkowski_distance(intersection, center) if neighbour != -1 else 0
-        skewness.append(2.0 * distance / length)
-        skewness_vector.append(center - intersection if neighbour != -1 else center - center)
-
-    skewness = np.array(skewness)
-    skewness_vector = np.array(skewness_vector).T
-    return skewness, skewness_vector
 
 def project_vector_to_plane(v, n):
     # Convert v and n into numpy arrays
@@ -287,7 +276,104 @@ def project_vectors_to_planes(v, n, rotate=False):
         return projected_v / projected_vv * vv
     else:
         return v - np.sum(v * n, axis=0) * n
+
+def get_skewness(points, point_normals, barycenters, owners, neighbours, edges_to_vertices):
+    # Skewness
+    def project_points_onto_planes(v, p, n):
+        n = np.array(n)
+        v = np.array(v)
+        p = np.array(p)
+        return v - np.sum((v - p) * n, axis=0) / np.sum(n * n, axis=0) * n
+
+    def find_intersections(v1, v2, p, t):
+        # Convert inputs to arrays if not already (assuming inputs are in appropriate shape)
+        v1 = np.array(v1)
+        v2 = np.array(v2)
+        p = np.array(p)
+        t = np.array(t)
+
+        # Calculate direction vector from v1 to v2
+        d1 = v2 - v1
+        
+        # Calculate vector from v1 to p
+        b = p - v1
+        
+        # Project b onto d1 to find the scalar multiplier for d1
+        u = np.einsum('ij,ij->i', b, d1) / np.einsum('ij,ij->i', d1, d1)
+        
+        # Calculate potential intersection points
+        intersection_point = v1 + u[:, np.newaxis] * d1
+
+        # Check if these intersection points also lie on the line defined by p and t
+        # This is to verify the solution is correct (p + s*t should equal intersection_point)
+        # We solve for s to see if the equation holds
+        #s = np.einsum('ij,ij->i', (intersection_point - p), t) / np.einsum('ij,ij->i', t, t)
+
+        # Calculate the point on line p + s*t
+        #verify_point = p + s[:, np.newaxis] * t
+        
+        # Check if the calculated point matches the intersection point
+        #if np.allclose(intersection_point, verify_point):
+        return intersection_point
+        #else:
+        #    return None
     
+    def project_point_onto_plane(v, p, n):
+        n = np.array(n)
+        v = np.array(v)
+        p = np.array(p)
+        return v - np.dot(v - p, n) / np.dot(n, n) * n
+    
+    def find_intersection(v1, v2, p, t, n):
+        v1_proj = project_point_onto_plane(v1, p, n)
+        v2_proj = project_point_onto_plane(v2, p, n)
+        d1 = v2_proj - v1_proj
+        t = np.array(t)
+
+        # Matrix to solve for parameters t (for the projected line) and s (for the line in the plane)
+        A = np.column_stack([d1, -t])
+        b = np.array(p) - v1_proj
+
+        # Check if the matrix A is singular (i.e., lines are parallel)
+        if np.linalg.matrix_rank(A) < 2:
+            return None  # Lines are parallel or coincident; no unique intersection
+
+        # Solve the linear system
+        params, residuals, rank, s = np.linalg.lstsq(A, b, rcond=None)
+        if residuals.size > 0 and not np.isclose(residuals, 0):
+            return None  # The lines do not intersect
+
+        intersection_point = v1_proj + params[0] * d1
+        return intersection_point
+
+    skewness = []
+    skewness_vector = []
+    edge_lengths = get_edge_lengths(points, edges_to_vertices)
+    edge_centers = get_edge_centers(points, edges_to_vertices)
+    edge_tangents, edge_bitangents, _ = get_edge_tbns(points, point_normals, edges_to_vertices)
+    projected_cell_centers_owners = project_points_onto_planes(barycenters[:, owners], edge_tangents, edge_bitangents)
+    projected_cell_centers_neighbours = project_points_onto_planes(barycenters[:, neighbours], edge_tangents, edge_bitangents)
+    intersections = find_intersections(\
+        projected_cell_centers_owners.T, \
+        projected_cell_centers_neighbours.T, \
+        edge_centers.T, \
+        edge_tangents.T)
+    intersections[neighbours == -1, :] = edge_centers[:, neighbours == -1].T
+    distances = minkowski_distance(intersections, edge_centers.T)
+    distances[neighbours == -1] = 0
+    skewness = 2.0 * distances / edge_lengths
+    skewness_vector = edge_centers.T - intersections
+
+    #for owner, neighbour, center, length, tangent, bitangent in zip(owners, neighbours, edge_centers.T, edge_lengths, edge_tangents.T, edge_bitangents.T):
+    #    intersection = find_intersection(barycenters[:, owner], barycenters[:, neighbour], center, tangent, bitangent) if neighbour != -1 else None
+    #    distance = minkowski_distance(intersection, center) if neighbour != -1 else 0
+    #    skewness.append(2.0 * distance / length)
+    #    skewness_vector.append(center - intersection if neighbour != -1 else center - center)
+
+    skewness = np.array(skewness)
+    skewness_vector = np.array(skewness_vector).T
+    return skewness, skewness_vector
+
 if __name__=="__main__":
     np.random.seed(42)
 

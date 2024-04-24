@@ -6,6 +6,7 @@ from scipy.sparse.linalg import cg, LinearOperator
 from pyamg import smoothed_aggregation_solver  # For AMG preconditioning
 from geometry import *
 
+
 class Mesh(object):
     def __init__(self, points, simplices, point_normals=None) -> None:
         if point_normals.any() == None:
@@ -54,6 +55,7 @@ class Mesh(object):
         self.diffusion_operator = {}
         self.convection_operator = {}
         self.possion_operator = {}
+        self.sngrad_coeffs = {}
 
     def print_members(self):
         for name, value in self.__dict__.items():
@@ -71,7 +73,14 @@ class Mesh(object):
                  np.where(self.neighbours != -1,\
                 self.edge_weighing_factor * phi[...,self.neighbours],np.zeros_like(phi[...,self.owners]))
 
-    def reconstruct_surface_gradient(self, phi, n_skewness_corr_iter=1):
+    def reconstruct_surface_gradient(self, phi, n_skewness_corr_iter=1, dirty=False):
+        if dirty or self.sngrad_coeffs == {}:
+            self.sngrad_coeffs = {}
+            self.sngrad_coeffs["owner_sf"] = self.edge_lengths \
+                * project_vectors_to_planes(self.edge_normals, self.barynormals[...,self.owner_indices], rotate=True) / self.areas[...,self.owner_indices]
+            self.sngrad_coeffs["neighbour_sf"] = self.edge_lengths \
+                * project_vectors_to_planes(self.edge_normals, self.barynormals[...,self.neighbour_indices], rotate=True) / self.areas[...,self.neighbour_indices]
+        
         # Init dphi_f
         dphi_f = np.zeros_like(self.edge_centers)
         dphi = np.zeros((3, len(self.areas)))
@@ -85,22 +94,16 @@ class Mesh(object):
 
             # Estimate \nabla \phi_C
             dphi.fill(0)
-            np.add.at(dphi, (slice(None), self.owner_indices), phi_f \
-                * self.edge_lengths \
-                * project_vectors_to_planes(self.edge_normals, self.barynormals[...,self.owner_indices], rotate=True) / self.areas[...,self.owner_indices])
-            np.add.at(dphi, (slice(None), self.neighbour_indices), -phi_f \
-                * self.edge_lengths \
-                * project_vectors_to_planes(self.edge_normals, self.barynormals[...,self.neighbour_indices], rotate=True) / self.areas[...,self.neighbour_indices])
+            np.add.at(dphi, (slice(None), self.owner_indices), phi_f * self.sngrad_coeffs["owner_sf"])
+            np.add.at(dphi, (slice(None), self.neighbour_indices), -phi_f * self.sngrad_coeffs["neighbour_sf"])
 
-            # (here to enforce boundary condition)
+            # (here to enforce boundary condition for dphi)
 
             # Estimate phi_f
             dphi_f = (1.0 - self.edge_weighing_factor) * dphi[...,self.owners] + np.where(self.neighbours != -1, self.edge_weighing_factor * dphi[...,self.neighbours],np.zeros_like(dphi[...,self.owners]))
             
-            # Enforce neumann boundary
-            #for edge_ind, center, neighbour in zip(range(len(self.neighbours)), self.edge_centers, self.neighbours):
-            #    if neighbour == -1:
-            #        dphi_f[edge_ind] = 0.0
+            # (here to enforce boundary condition for dphi_f)
+            #dphi_f[self.neighbour_indices == -1] = 0.0
         
         return dphi_f, dphi
     
@@ -172,8 +175,8 @@ class Mesh(object):
         dphi_f, _ = self.reconstruct_surface_gradient(phi)
         corr = np.sum((dphi_f * gamma_f) * self.tf, axis=0)
         self.diffusion_operator["rhs"].fill(0)
-        np.add.at(self.diffusion_operator["rhs"], self.owner_indices, corr[...,self.owner_indices])
-        np.add.at(self.diffusion_operator["rhs"], self.neighbour_indices, -corr[...,self.neighbour_indices])
+        np.add.at(self.diffusion_operator["rhs"], self.owner_indices, corr[valid_faces])
+        np.add.at(self.diffusion_operator["rhs"], self.neighbour_indices, -corr[valid_faces])
 
         # Update sparse matrix
         self.diffusion_operator["Jf"].data = self.diffusion_operator["data_values"]
@@ -295,23 +298,25 @@ class Mesh(object):
             # Construct dphi_fn
             dphi_fn = 0*self.edge_lengths
 
+            # Setting up a preconditioner
+            ml = smoothed_aggregation_solver(Jf)
+
             self.possion_operator["row_indices"] = row_indices
             self.possion_operator["col_indices"] = col_indices
             self.possion_operator["data_values"] = data_values
             self.possion_operator["Jf"] = Jf
             self.possion_operator["rhs"] = rhs
             self.possion_operator["dphi_fn"] = dphi_fn
+            self.possion_operator["preconditioner"] = ml.aspreconditioner()
 
         # Update rhs
         self.possion_operator["rhs"].fill(0)
         np.add.at(self.possion_operator["rhs"], self.owner_indices, mass_flow_rate[valid_faces] * self.edge_lengths[valid_faces])
         np.add.at(self.possion_operator["rhs"], self.neighbour_indices, -mass_flow_rate[valid_faces] * self.edge_lengths[valid_faces])
 
-        # Setting up a preconditioner
-        ml = smoothed_aggregation_solver(self.possion_operator["Jf"])
-        M = ml.aspreconditioner()
-
-        phi = spla.cg(self.possion_operator["Jf"], self.possion_operator["rhs"], M=M)[0]
+        phi, info = spla.cg(self.possion_operator["Jf"], self.possion_operator["rhs"], maxiter=20, M=self.possion_operator["preconditioner"])
+        if info > 0:
+            print("Poisson solver: Convergence to tolerance not achieved!")
 
         # Reconstruct surface normal gradients
         self.possion_operator["dphi_fn"].fill(0)

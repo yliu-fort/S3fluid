@@ -12,9 +12,9 @@ mesh = Mesh(points, simplices, point_normals)
 
 # %% Init
 # \phi = x^2 + y^2 + (xy)^2
-xc = mesh.barycenters[:,0]
-yc = mesh.barycenters[:,1]
-zc = mesh.barycenters[:,2]
+xc = mesh.barycenters[0]
+yc = mesh.barycenters[1]
+zc = mesh.barycenters[2]
 #u = (xc**2 + yc**2 + zc**2 + (xc*yc*zc)**2)
 gamma = 0.1+0.5*(1+np.tanh(5*(1-(xc*yc*zc)**2*27*2)))
 phi = 1.0/np.cosh(100*(xc - 1.0))
