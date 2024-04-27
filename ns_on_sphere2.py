@@ -54,8 +54,8 @@ xc = mesh.barycenters[0]
 yc = mesh.barycenters[1]
 zc = mesh.barycenters[2]
 
-#phi = np.sign(yc)*np.acos(xc/np.sqrt(xc**2+yc**2))/np.pi
-#theta = np.acos(zc)/np.pi
+#phi = np.sign(yc)*np.arccos(xc/np.sqrt(xc**2+yc**2))/np.pi
+theta = np.arccos(zc)/np.pi
 
 c = 1.0/np.cosh(100*(xc - 0.5))/np.cosh(100*(yc - 0.5))
 
@@ -63,7 +63,10 @@ xf = mesh.edge_centers[0]
 yf = mesh.edge_centers[1]
 zf = mesh.edge_centers[2]
 
-u = np.random.randn(*(3,len(xc)))
+urot = np.cross(np.array([0,0,1]), mesh.barynormals, axis=0)
+urot *= theta * (1.0 - theta) / 0.25
+urot[:, theta > 0.5] *= -1
+u = urot + 0.001*np.random.randn(*(3,len(xc)))
 
 u = project_vectors_to_planes(u, mesh.barynormals)
 
