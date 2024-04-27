@@ -314,7 +314,7 @@ class Mesh(object):
         np.add.at(self.possion_operator["rhs"], self.owner_indices, mass_flow_rate[valid_faces] * self.edge_lengths[valid_faces])
         np.add.at(self.possion_operator["rhs"], self.neighbour_indices, -mass_flow_rate[valid_faces] * self.edge_lengths[valid_faces])
 
-        phi, info = spla.cg(self.possion_operator["Jf"], self.possion_operator["rhs"], maxiter=20, M=self.possion_operator["preconditioner"])
+        phi, info = spla.gmres(self.possion_operator["Jf"], self.possion_operator["rhs"], maxiter=20, M=self.possion_operator["preconditioner"])
         if info > 0:
             print("Poisson solver: Convergence to tolerance not achieved!")
 

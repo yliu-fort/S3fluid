@@ -374,6 +374,33 @@ def get_skewness(points, point_normals, barycenters, owners, neighbours, edges_t
     skewness_vector = np.array(skewness_vector).T
     return skewness, skewness_vector
 
+def dual_grid(points, simplices):
+    # Calculate centroids of the original simplices to be the vertices of the dual grid
+    dual_vertices = get_barycenters(points, simplices).T
+    owners, neighbours, _ = get_edge_connectivities(simplices)
+    dual_vertices_adjacency = [[] for _ in range(len(simplices))]
+    [dual_vertices_adjacency[o].append(n) for o, n in zip(owners, neighbours) if n != -1]
+    [dual_vertices_adjacency[n].append(o) for o, n in zip(owners, neighbours) if n != -1]
+    
+    # For each original vertex, find all simplices it belongs to
+    vertex_to_simplices = {i: [] for i in range(len(points))}
+    for simplex_index, simplex in enumerate(simplices):
+        for vertex_index in simplex:
+            vertex_to_simplices[vertex_index].append(simplex_index)
+    
+    # Construct the faces of the dual mesh
+    dual_faces = []
+    for simplices_indices in vertex_to_simplices.values():
+        # Start with the first vertex and arrange others based on shared edges
+        ordered_vertices = [simplices_indices[0]]
+        for _ in range(len(simplices_indices) - 1):
+            last_vertex = ordered_vertices[-1]
+            next_vertex = next(v for v in simplices_indices if v != last_vertex and v in dual_vertices_adjacency[last_vertex] and v not in ordered_vertices)
+            ordered_vertices.append(next_vertex)
+        dual_faces.append(ordered_vertices)
+
+    return dual_vertices, dual_faces
+
 if __name__=="__main__":
     np.random.seed(42)
 

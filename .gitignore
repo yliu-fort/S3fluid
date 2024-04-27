@@ -6,3 +6,4 @@
 **/*.vtk
 **/*.prof
 **/*.lprof
+**/.DS_Store
