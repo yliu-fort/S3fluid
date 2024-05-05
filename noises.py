@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 def noise_psd1(N, psd = lambda f: 1):
         X_white = np.fft.rfft(np.random.randn(N))
@@ -78,6 +77,8 @@ def pink_noise(f):
     return 1/np.where(f == 0, float('inf'), np.sqrt(f))
     
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    
     def plot_spectrum(s):
         f = np.fft.rfftfreq(len(s))
         return plt.loglog(f, np.abs(np.fft.rfft(s)))[0]
