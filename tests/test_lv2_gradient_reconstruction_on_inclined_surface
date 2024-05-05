@@ -1,13 +1,8 @@
 # %%
 import numpy as np
-from scipy.spatial import Delaunay, minkowski_distance
-import meshio
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mesh import Mesh
-import scipy.sparse.linalg as spla
-from icosphere import icosphere
-from geometry import project_vector_to_plane
 
 # %%
 points = np.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]])
