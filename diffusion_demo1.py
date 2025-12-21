@@ -5,6 +5,7 @@ import meshio
 from icosphere import icosphere
 from mesh import Mesh
 import scipy.sparse.linalg as spla
+from rich.progress import track
 
 points, simplices = icosphere(30)
 point_normals = points / np.linalg.norm(points,axis=-1,keepdims=True)
@@ -27,9 +28,8 @@ Iv = mesh.identity_matrix()
 # %%
 with meshio.xdmf.TimeSeriesWriter("diffusion_test.xdmf") as writer:
     writer.write_points_cells(points, [("triangle", simplices),])
-    for t in range(101):
+    for t in track(range(101), description="Simulating Diffusion"):
         # Solve
         dt = 0.01
         phi = spla.gmres(Iv+dt*J_diff, phi*mesh.areas+dt*rhs_diff)[0]
-        print(t*dt)
         writer.write_data(t*dt, cell_data={"phi": [phi]})
