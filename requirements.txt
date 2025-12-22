@@ -1,0 +1,6 @@
+numpy
+scipy
+meshio
+icosphere
+h5py
+rich
