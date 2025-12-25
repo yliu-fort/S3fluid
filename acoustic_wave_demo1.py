@@ -1,4 +1,5 @@
 # %%
+import sys
 import numpy as np
 from scipy.spatial import Delaunay, minkowski_distance
 import meshio
@@ -19,7 +20,7 @@ gamma = 0.1+0.5*(1+np.tanh(5*(1-(xc*yc*zc)**2*27*2)))
 u = 1.0/np.cosh(100*(xc - 1.0))
 v = 0*xc
 
-print(min(mesh.edge_lengths),max(mesh.edge_lengths))
+print(f"Edge lengths: min={min(mesh.edge_lengths):.6f}, max={max(mesh.edge_lengths):.6f}")
 
 mesh0 = meshio.Mesh(
     points,
@@ -34,13 +35,36 @@ mesh0.write(
 J_diff,rhs_diff = mesh.diffusion_matrix(u, gamma)
 
 # %%
+# Progress bar utility
+def progress_bar(iterable, total=None, desc="Processing"):
+    if total is None:
+        try:
+            total = len(iterable)
+        except TypeError:
+            total = 0
+
+    # Check if we are in a TTY
+    is_tty = sys.stdout.isatty()
+
+    for i, item in enumerate(iterable):
+        yield item
+        if is_tty and total > 0:
+            percent = (i + 1) / total
+            bar_length = 40
+            filled_length = int(bar_length * percent)
+            bar = '█' * filled_length + '-' * (bar_length - filled_length)
+            sys.stdout.write(f'\r{desc}: |{bar}| {percent:.1%}')
+            sys.stdout.flush()
+
+    if is_tty:
+        sys.stdout.write('\n')
+
 with meshio.xdmf.TimeSeriesWriter("results/wave_test.xdmf") as writer:
     writer.write_points_cells(points, [("triangle", simplices),])
-    for t in range(501):
+    for t in progress_bar(range(501), desc="Simulating Wave"):
         # Solve
         dt = 0.01
         v = v - dt*J_diff@u/mesh.areas
         u = u + dt*v
-        print(t)
         if t % 10 == 0:
             writer.write_data(t, cell_data={"u": [u],"v": [v],"c": [np.sqrt(gamma)]})
