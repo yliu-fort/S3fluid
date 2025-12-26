@@ -25,11 +25,12 @@ J_diff,rhs_diff = mesh.diffusion_matrix(phi, gamma)
 Iv = mesh.identity_matrix()
 
 # %%
+from cli_utils import progress_bar
+
 with meshio.xdmf.TimeSeriesWriter("diffusion_test.xdmf") as writer:
     writer.write_points_cells(points, [("triangle", simplices),])
-    for t in range(101):
+    for t in progress_bar(range(101), desc="Diffusion", unit="steps"):
         # Solve
         dt = 0.01
         phi = spla.gmres(Iv+dt*J_diff, phi*mesh.areas+dt*rhs_diff)[0]
-        print(t*dt)
         writer.write_data(t*dt, cell_data={"phi": [phi]})
