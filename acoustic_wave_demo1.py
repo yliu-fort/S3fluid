@@ -4,6 +4,7 @@ from scipy.spatial import Delaunay, minkowski_distance
 import meshio
 from icosphere import icosphere
 from mesh import Mesh
+from cli_utils import progress_bar
 
 points, simplices = icosphere(30)
 point_normals = points / np.linalg.norm(points,axis=-1,keepdims=True)
@@ -36,11 +37,10 @@ J_diff,rhs_diff = mesh.diffusion_matrix(u, gamma)
 # %%
 with meshio.xdmf.TimeSeriesWriter("results/wave_test.xdmf") as writer:
     writer.write_points_cells(points, [("triangle", simplices),])
-    for t in range(501):
+    for t in progress_bar(range(501), desc="Simulating Wave"):
         # Solve
         dt = 0.01
         v = v - dt*J_diff@u/mesh.areas
         u = u + dt*v
-        print(t)
         if t % 10 == 0:
             writer.write_data(t, cell_data={"u": [u],"v": [v],"c": [np.sqrt(gamma)]})
