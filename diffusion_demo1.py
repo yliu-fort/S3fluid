@@ -1,10 +1,12 @@
 # %%
 import numpy as np
 from scipy.spatial import Delaunay, minkowski_distance
+import os
 import meshio
 from icosphere import icosphere
 from mesh import Mesh
 import scipy.sparse.linalg as spla
+from cli_utils import progress_bar
 
 points, simplices = icosphere(30)
 point_normals = points / np.linalg.norm(points,axis=-1,keepdims=True)
@@ -25,11 +27,11 @@ J_diff,rhs_diff = mesh.diffusion_matrix(phi, gamma)
 Iv = mesh.identity_matrix()
 
 # %%
-with meshio.xdmf.TimeSeriesWriter("diffusion_test.xdmf") as writer:
+os.makedirs("results", exist_ok=True)
+with meshio.xdmf.TimeSeriesWriter("results/diffusion_test.xdmf") as writer:
     writer.write_points_cells(points, [("triangle", simplices),])
-    for t in range(101):
+    for t in progress_bar(range(101), desc="Computing diffusion"):
         # Solve
         dt = 0.01
         phi = spla.gmres(Iv+dt*J_diff, phi*mesh.areas+dt*rhs_diff)[0]
-        print(t*dt)
         writer.write_data(t*dt, cell_data={"phi": [phi]})
