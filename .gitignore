@@ -3,3 +3,7 @@
 /__pycache__
 **/*.xdmf
 **/*.h5
+results/
+*.vtk
+*.xdmf
+*.h5
