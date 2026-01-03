@@ -5,6 +5,7 @@ import meshio
 from icosphere import icosphere
 from mesh import Mesh
 import scipy.sparse.linalg as spla
+from cli_utils import ensure_directory, progress_bar
 
 points, simplices = icosphere(30)
 point_normals = points / np.linalg.norm(points,axis=-1,keepdims=True)
@@ -25,11 +26,11 @@ J_diff,rhs_diff = mesh.diffusion_matrix(phi, gamma)
 Iv = mesh.identity_matrix()
 
 # %%
-with meshio.xdmf.TimeSeriesWriter("diffusion_test.xdmf") as writer:
+ensure_directory("results")
+with meshio.xdmf.TimeSeriesWriter("results/diffusion_test.xdmf") as writer:
     writer.write_points_cells(points, [("triangle", simplices),])
-    for t in range(101):
+    for t in progress_bar(range(101), desc="Simulating Diffusion"):
         # Solve
         dt = 0.01
         phi = spla.gmres(Iv+dt*J_diff, phi*mesh.areas+dt*rhs_diff)[0]
-        print(t*dt)
         writer.write_data(t*dt, cell_data={"phi": [phi]})
