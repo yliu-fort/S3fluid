@@ -335,7 +335,7 @@ import GUI from 'lil-gui';
 const params = {
   playing:         true,
   stepsPerFrame:   1,
-  dt:              0.5,
+  dt:              0.005,
   nu:              1e-5,
   lmax:            32,
   visualSeg:       128,
@@ -675,7 +675,7 @@ const colormapMap = { 'RdBu_r': 0, 'Viridis': 1, 'Inferno': 2, 'Plasma': 3 };
 const guiState = {
   playing:       true,
   stepsPerFrame: 1,
-  dt:            0.5,
+  dt:            0.005,
   nu:            1e-5,
   lmax:          32,
   visualSeg:     128,
@@ -705,7 +705,7 @@ simFolder.add(guiState, 'stepsPerFrame', 1, 8, 1).name('步/帧').onChange(v => 
   params.stepsPerFrame = v;
 });
 
-simFolder.add(guiState, 'dt', 0.05, 2.0, 0.05).name('时间步长 dt').onChange(v => {
+simFolder.add(guiState, 'dt', 0.0005, 0.05, 0.0005).name('时间步长 dt').onChange(v => {
   params.dt = v;
   sendParam('dt', v);
 });

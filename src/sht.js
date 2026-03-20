@@ -322,17 +322,15 @@ export class SHT {
           // dP_l^m/dθ = (m * ct / sinT) * P_l^m(ct) - sqrt((l+m)(l-m+1)) * P_l^{m+1}(ct)
           // (the second term requires P_l^{m+1})
           let dplm = 0.0;
-          if (l > 0 || m === 0) {
-            dplm = m * (ct / sinT) * plmRow[l - m];
-            if (m < l) {
-              // Need P_l^{m+1}: in plmTable[i][m+1], index l-(m+1) = l-m-1
-              const plmPlus1Row = _plmTable[i][m + 1];
-              const plmPlus1 = plmPlus1Row[l - m - 1];
-              // Normalization correction factor between our normalized Plm and the gradient formula
-              // Factor: sqrt((l-m)*(l+m+1))
-              const fac = Math.sqrt((l - m) * (l + m + 1.0));
-              dplm -= fac * plmPlus1;
+          if (l > 0) {
+            // Using recurrence: sin(theta) d/d(theta) P_l^m = l cos(theta) P_l^m - sqrt((l^2 - m^2)(2l+1)/(2l-1)) P_{l-1}^m
+            const plm = plmRow[l - m];
+            let plm_minus_1 = 0.0;
+            if (l > m) {
+              plm_minus_1 = plmRow[l - 1 - m];
             }
+            const fac = Math.sqrt((l * l - m * m) * (2.0 * l + 1.0) / (2.0 * l - 1.0));
+            dplm = (l * ct * plm - fac * plm_minus_1) / sinT;
           }
 
           sumRe += re * dplm;
