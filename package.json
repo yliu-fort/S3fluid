@@ -1,0 +1,28 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "**纯浏览器运行 · 无需安装 · 零后端依赖**",
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "xvfb-run node --experimental-vm-modules node_modules/jest/bin/jest.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yliu-fort/S3fluid.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/yliu-fort/S3fluid/issues"
+  },
+  "homepage": "https://github.com/yliu-fort/S3fluid#readme",
+  "dependencies": {
+    "gl": "^8.1.6",
+    "jest": "^30.3.0"
+  }
+}
