@@ -122,4 +122,89 @@ describe('SHT (Phase 2)', () => {
 
     expect(l2NormError).toBeLessThan(1e-5); // Should pass based on mock
   });
+
+  describe('CPU Precomputation Numerical Tests', () => {
+    test('Gauss-Legendre weights sum to 2', () => {
+      // Create SHT without GPGPU to just test math
+      const shtCPU = new SHT(null, 32, 64);
+      let sum = 0;
+      for (let i = 0; i < shtCPU.latRes; i++) {
+        sum += shtCPU.weights[i];
+      }
+      expect(sum).toBeCloseTo(2.0, 10);
+    });
+
+    test('Gauss-Legendre nodes symmetry', () => {
+      const shtCPU = new SHT(null, 32, 64);
+      const n = shtCPU.latRes;
+      for (let i = 0; i < n / 2; i++) {
+        expect(shtCPU.nodes[i] + shtCPU.nodes[n - 1 - i]).toBeCloseTo(0.0, 10);
+      }
+    });
+
+    test('Orthogonality of Normalized Legendre Polynomials P_l^0', () => {
+      const shtCPU = new SHT(null, 32, 64);
+      const lMax = shtCPU.lMax;
+      const n = shtCPU.latRes;
+
+      // test orthogonality: integral P_l1 P_l2 dx = delta_{l1, l2}
+      // In discrete terms: sum_i P_l1(x_i) P_l2(x_i) w_i = delta_{l1, l2}
+      for (let l1 = 0; l1 < Math.min(5, lMax); l1++) {
+        for (let l2 = 0; l2 < Math.min(5, lMax); l2++) {
+          let integral = 0;
+          for (let i = 0; i < n; i++) {
+            let p1 = shtCPU.legendreData[(i * lMax + l1) * 4];
+            let p2 = shtCPU.legendreData[(i * lMax + l2) * 4];
+            let w = shtCPU.weights[i];
+            integral += p1 * p2 * w;
+          }
+          if (l1 === l2) {
+            expect(integral).toBeCloseTo(1.0, 5);
+          } else {
+            expect(integral).toBeCloseTo(0.0, 5);
+          }
+        }
+      }
+    });
+  });
+
+  describe('CPU Precomputation Numerical Stress Tests', () => {
+    test('High resolution stability (latRes=512, lonRes=1024)', () => {
+      // 1024/3 = 341. P_341^0 should not be NaN or Infinity.
+      const shtCPU = new SHT(null, 512, 1024);
+      const lMax = shtCPU.lMax; // 341
+      const n = shtCPU.latRes;
+
+      // Check sum of weights is still exactly 2
+      let sum = 0;
+      for (let i = 0; i < n; i++) {
+        sum += shtCPU.weights[i];
+      }
+      expect(sum).toBeCloseTo(2.0, 10);
+
+      // Check the very last polynomial for any NaNs or Infinities (overflow)
+      let hasNaN = false;
+      let hasInfinity = false;
+      for (let i = 0; i < n; i++) {
+        let val = shtCPU.legendreData[(i * lMax + (lMax - 1)) * 4];
+        if (Number.isNaN(val)) hasNaN = true;
+        if (!Number.isFinite(val)) hasInfinity = true;
+      }
+
+      expect(hasNaN).toBe(false);
+      expect(hasInfinity).toBe(false);
+
+      // Check orthgonality holds at high resolution
+      let l1 = lMax - 2;
+      let l2 = lMax - 2;
+      let integral = 0;
+      for (let i = 0; i < n; i++) {
+        let p1 = shtCPU.legendreData[(i * lMax + l1) * 4];
+        let p2 = shtCPU.legendreData[(i * lMax + l2) * 4];
+        let w = shtCPU.weights[i];
+        integral += p1 * p2 * w;
+      }
+      expect(integral).toBeCloseTo(1.0, 5);
+    });
+  });
 });
