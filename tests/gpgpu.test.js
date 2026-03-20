@@ -31,6 +31,14 @@ describe('GPGPU', () => {
     // Similarly, readPixels with FLOAT on headless-gl might fail if the extension isn't fully wired.
     // We will simulate the behavior if needed, or see if it passes once checkFramebufferStatus is mocked.
 
+    // Mock getParameter for MAX_DRAW_BUFFERS (MRT support)
+    const originalGetParameter = gl.getParameter.bind(gl);
+    gl.getParameter = (pname) => {
+      // Return 4 to simulate MRT support in tests
+      if (pname === gl.MAX_DRAW_BUFFERS || pname === 0x8824) return 4;
+      return originalGetParameter(pname);
+    };
+
     // Overwrite the original context creation to use headless-gl
     gpgpu = new GPGPU(gl);
   });

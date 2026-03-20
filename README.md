@@ -8,12 +8,9 @@
 
 ### 安装与运行
 
-本项目使用 npm 管理测试和部分开发依赖（主程序无需打包构建，直接在浏览器运行）。
+主程序为纯静态 Web 应用，无需打包构建，直接在浏览器中即可运行。项目目录下的 `package.json` 仅用于管理**开发与测试依赖**。
 
 ```bash
-# 安装依赖 (如 jest 测试框架, gl 头文件)
-npm install
-
 # 运行本地开发服务器
 # 你可以使用任意静态文件服务器（必须通过 HTTP 加载，直接打开 index.html 因 CORS 限制无法使用）
 npx serve .
@@ -22,13 +19,26 @@ python -m http.server 8080
 # 然后打开 http://localhost:8080
 ```
 
-### 运行测试
+### 运行测试 (可选)
 
-使用 Jest 框架进行单元测试。由于项目使用 ES Modules，需要使用 `npm test` 命令，它已经配置了 Node.js 的实验性 flag 和无头 GL 上下文支持：
+本项目使用 Jest 进行单元测试，并依赖 `gl` (headless-gl) 来在 Node.js 中模拟 WebGL 上下文。
 
 ```bash
+# 安装开发与测试依赖
+npm install
+
+# 运行测试
 npm test
 ```
+
+> **⚠️ Windows 系统安装测试依赖注意事项:**
+>
+> 在运行 `npm install` 安装 `gl` 测试包时，它需要编译原生 C++ 模块。如果你的系统报错 `Could not find any Visual Studio installation to use`，这说明你的电脑缺乏 C++ 编译环境。
+>
+> **解决办法：**
+> 如果你只是想运行和体验项目，**完全不需要执行 npm install 或运行测试**，直接开启 HTTP 服务即可！
+> 如果你必须运行测试，你需要以管理员身份运行 PowerShell 并安装构建工具：
+> `npm install --global windows-build-tools` 或者手动安装 Visual Studio 并勾选 "使用 C++ 的桌面开发" 工作负载。
 
 ## 当前开发进度
 

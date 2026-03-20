@@ -16,6 +16,12 @@ export class GPGPU {
       throw new Error("EXT_color_buffer_float is not supported");
     }
 
+    // Verify MRT support
+    const maxDrawBuffers = this.gl.getParameter(this.gl.MAX_DRAW_BUFFERS);
+    if (!maxDrawBuffers || maxDrawBuffers < 2) {
+      throw new Error("Multiple Render Targets (MRT) is not supported by this device");
+    }
+
     this.gl.disable(this.gl.DEPTH_TEST);
     this.gl.disable(this.gl.BLEND);
   }
