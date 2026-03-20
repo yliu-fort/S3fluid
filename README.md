@@ -68,3 +68,17 @@ u_φ = (1/sinθ) ∂ψ/∂φ,  u_θ = -∂ψ/∂θ
 `examples/demo_spherical_spectral_turbulence.ipynb` 包含基于 [SHTns](https://users.isterre.fr/nschaeff/SHTns/) 的高性能 Python 实现，可作为 Web 版本的数学参考和精度基准。
 
 依赖：`numpy`, `shtns`, `matplotlib`, `cartopy`, `tqdm`
+
+## 开发进度
+
+### Phase 1: GPGPU 基础设施搭建 ✅
+- 实现 `GPGPUSystem`：负责初始化 WebGL2 上下文并严格检查 `EXT_color_buffer_float` 支持（Fail-Fast 机制）。
+- 实现 `GPGPUShader`：封装 Shader 编译与连接，统一错误捕获和日志抛出。
+- 实现 `PingPongFBO`：封装基于 `RGBA32F` 浮点纹理的 FBO 及交替读写（Ping-Pong）循环机制。
+- 自动化测试支持：通过 `TestUtils` 实现基于 `gl.readPixels` 的 float 数据提取和比较工具。
+
+**运行测试**：
+```bash
+python -m http.server 8080
+# 浏览器访问 http://localhost:8080/tests/phase1.html
+```
