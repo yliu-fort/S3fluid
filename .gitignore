@@ -3,3 +3,4 @@
 /__pycache__
 **/*.xdmf
 **/*.h5
+frontend/node_modules/
