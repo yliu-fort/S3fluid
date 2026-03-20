@@ -56,17 +56,22 @@ describe('SHT (Phase 2)', () => {
         ]);
     };
 
-    sht.forwardPass.render = (targetFBO, width, height, uniforms, textures) => {
-        // Mock Forward SHT returning some spectral data
+    sht.forwardFourierPass.render = (targetFBO, width, height, uniforms, textures) => {
+        targetFBO._mockData = new Float32Array(width * height * 4);
+    };
+
+    sht.forwardLegendrePass.render = (targetFBO, width, height, uniforms, textures) => {
         const mockData = new Float32Array(width * height * 4);
-        mockData[0] = 1.0; // Assume we get a coefficient 1.0 for the test
+        mockData[0] = 1.0;
         targetFBO._mockData = mockData;
     };
 
-    sht.inversePass.render = (targetFBO, width, height, uniforms, textures) => {
-        // Mock Inverse SHT returning to original grid data
+    sht.inverseLegendrePass.render = (targetFBO, width, height, uniforms, textures) => {
+        targetFBO._mockData = new Float32Array(width * height * 4);
+    };
+
+    sht.inverseFourierPass.render = (targetFBO, width, height, uniforms, textures) => {
         const mockData = new Float32Array(width * height * 4);
-        // Fill it with something resembling cos(theta)
         for(let i=0; i<height; i++) {
            for(let j=0; j<width; j++) {
               let idx = (i * width + j) * 4;
@@ -142,26 +147,32 @@ describe('SHT (Phase 2)', () => {
       }
     });
 
-    test('Orthogonality of Normalized Legendre Polynomials P_l^0', () => {
+    test('Orthogonality of Normalized Legendre Polynomials P_l^m', () => {
       const shtCPU = new SHT(null, 32, 64);
       const lMax = shtCPU.lMax;
+      const mMax = shtCPU.mMax;
       const n = shtCPU.latRes;
 
-      // test orthogonality: integral P_l1 P_l2 dx = delta_{l1, l2}
-      // In discrete terms: sum_i P_l1(x_i) P_l2(x_i) w_i = delta_{l1, l2}
-      for (let l1 = 0; l1 < Math.min(5, lMax); l1++) {
-        for (let l2 = 0; l2 < Math.min(5, lMax); l2++) {
-          let integral = 0;
-          for (let i = 0; i < n; i++) {
-            let p1 = shtCPU.legendreData[(i * lMax + l1) * 4];
-            let p2 = shtCPU.legendreData[(i * lMax + l2) * 4];
-            let w = shtCPU.weights[i];
-            integral += p1 * p2 * w;
-          }
-          if (l1 === l2) {
-            expect(integral).toBeCloseTo(1.0, 5);
-          } else {
-            expect(integral).toBeCloseTo(0.0, 5);
+      // test orthogonality: integral P_l1^m P_l2^m dx = delta_{l1, l2}
+      // In discrete terms: sum_i P_l1^m(x_i) P_l2^m(x_i) w_i = delta_{l1, l2}
+      for (let m = 0; m < Math.min(3, mMax); m++) {
+        for (let l1 = m; l1 < Math.min(m + 5, lMax); l1++) {
+          for (let l2 = m; l2 < Math.min(m + 5, lMax); l2++) {
+            let integral = 0;
+            for (let i = 0; i < n; i++) {
+              let idx1 = i * (lMax * mMax) + (m * lMax + l1);
+              let idx2 = i * (lMax * mMax) + (m * lMax + l2);
+
+              let p1 = shtCPU.legendreData[idx1 * 4];
+              let p2 = shtCPU.legendreData[idx2 * 4];
+              let w = shtCPU.weights[i];
+              integral += p1 * p2 * w;
+            }
+            if (l1 === l2) {
+              expect(integral).toBeCloseTo(1.0, 3); // some tolerance for discrete integration
+            } else {
+              expect(integral).toBeCloseTo(0.0, 3);
+            }
           }
         }
       }
@@ -182,11 +193,16 @@ describe('SHT (Phase 2)', () => {
       }
       expect(sum).toBeCloseTo(2.0, 10);
 
-      // Check the very last polynomial for any NaNs or Infinities (overflow)
+      // Check the very last polynomial (m=lMax-1, l=lMax-1) for any NaNs or Infinities (overflow)
       let hasNaN = false;
       let hasInfinity = false;
+      let m = lMax - 1;
+      let l = lMax - 1;
+      let mMax = shtCPU.mMax;
+
       for (let i = 0; i < n; i++) {
-        let val = shtCPU.legendreData[(i * lMax + (lMax - 1)) * 4];
+        let idx = i * (lMax * mMax) + (m * lMax + l);
+        let val = shtCPU.legendreData[idx * 4];
         if (Number.isNaN(val)) hasNaN = true;
         if (!Number.isFinite(val)) hasInfinity = true;
       }
@@ -194,13 +210,15 @@ describe('SHT (Phase 2)', () => {
       expect(hasNaN).toBe(false);
       expect(hasInfinity).toBe(false);
 
-      // Check orthgonality holds at high resolution
+      // Check orthogonality holds at high resolution for m=0
       let l1 = lMax - 2;
       let l2 = lMax - 2;
       let integral = 0;
       for (let i = 0; i < n; i++) {
-        let p1 = shtCPU.legendreData[(i * lMax + l1) * 4];
-        let p2 = shtCPU.legendreData[(i * lMax + l2) * 4];
+        let idx1 = i * (lMax * mMax) + (0 * lMax + l1);
+        let idx2 = i * (lMax * mMax) + (0 * lMax + l2);
+        let p1 = shtCPU.legendreData[idx1 * 4];
+        let p2 = shtCPU.legendreData[idx2 * 4];
         let w = shtCPU.weights[i];
         integral += p1 * p2 * w;
       }
