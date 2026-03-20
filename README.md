@@ -6,13 +6,36 @@
 
 ## 快速开始
 
+### 安装与运行
+
+本项目使用 npm 管理测试和部分开发依赖（主程序无需打包构建，直接在浏览器运行）。
+
 ```bash
-# 使用任意静态文件服务器（必须通过 HTTP 加载，直接打开 index.html 因 CORS 限制无法使用）
+# 安装依赖 (如 jest 测试框架, gl 头文件)
+npm install
+
+# 运行本地开发服务器
+# 你可以使用任意静态文件服务器（必须通过 HTTP 加载，直接打开 index.html 因 CORS 限制无法使用）
 npx serve .
 # 或
 python -m http.server 8080
 # 然后打开 http://localhost:8080
 ```
+
+### 运行测试
+
+使用 Jest 框架进行单元测试。由于项目使用 ES Modules，需要使用 `npm test` 命令，它已经配置了 Node.js 的实验性 flag 和无头 GL 上下文支持：
+
+```bash
+npm test
+```
+
+## 当前开发进度
+
+**Phase 1 阶段已完成**：
+- [x] 验证设备的 WebGL 2.0 浮点纹理和 MRT 支持度。
+- [x] 搭建 Ping-Pong FBO 框架，实现基于纹理的简单局部差分计算（作为热身验证）。
+- [x] 实现基于 `gl.readPixels` 的自动化测试抓手。
 
 ## 功能特性
 
