@@ -2,7 +2,7 @@
 
 ## Phase 0: Planning & Architecture
 - [ ] Read program.md and understand requirements
-- [ ] Examine existing Python prototype notebook
+- [ ] Examine existing Python prototype
 - [ ] Create implementation plan
 
 ## Phase 1: Pure-JS Spherical Spectral Solver (No WASM)
@@ -12,6 +12,7 @@
   - [ ] Associated Legendre polynomials P_l^m
   - [ ] Forward transform (grid → spectral)
   - [ ] Inverse transform / gradient synthesis
+  - [ ] Comprehensive unit tests for each function
 - [ ] Implement NS solver core (RK4 + nonlinear advection)
 - [ ] Implement spectral filter (Gaussian)
 
