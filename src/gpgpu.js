@@ -162,7 +162,12 @@ export class ShaderPass {
       const location = gl.getUniformLocation(this.program, name);
       if (location !== null) {
         if (typeof value === 'number') {
-          gl.uniform1f(location, value);
+          // Check if the variable name implies an integer (like lonRes, mMax, lMax)
+          if (name === 'lonRes' || name === 'latRes' || name === 'mMax' || name === 'lMax' || name === 'K') {
+              gl.uniform1i(location, value);
+          } else {
+              gl.uniform1f(location, value);
+          }
         } else if (Array.isArray(value) && value.length === 2) {
           gl.uniform2fv(location, value);
         }
