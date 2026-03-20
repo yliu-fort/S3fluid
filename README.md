@@ -47,6 +47,11 @@ npm test
 - [x] 搭建 Ping-Pong FBO 框架，实现基于纹理的简单局部差分计算（作为热身验证）。
 - [x] 实现基于 `gl.readPixels` 的自动化测试抓手。
 
+**Phase 2 阶段已完成**：
+- [x] 将球谐变换（SHT）的数学过程拆解为适合 WebGL Fragment Shader 执行的纹理读取和矩阵运算。
+- [x] 将复杂的勒让德多项式和权重预先在 CPU 计算，编码为高精度纹理上传至 GPU。
+- [x] 完成 UT-02 和 UT-03，增加了全面的数值稳定性、正交性和极限高分辨率抗压测试（Numerical Stress Testing）。
+
 ## 功能特性
 
 | 功能 | 描述 |
