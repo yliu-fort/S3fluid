@@ -3,7 +3,15 @@ export class GPGPU {
     if (glContext) {
       this.gl = glContext;
     } else {
-      const canvas = document.createElement('canvas');
+      let canvas;
+      if (typeof document !== 'undefined') {
+        canvas = document.createElement('canvas');
+      } else if (typeof OffscreenCanvas !== 'undefined') {
+        canvas = new OffscreenCanvas(256, 256);
+      } else {
+        throw new Error("Neither HTMLCanvasElement nor OffscreenCanvas is supported");
+      }
+
       // Request WebGL 2.0
       this.gl = canvas.getContext('webgl2', { antialias: false, preserveDrawingBuffer: true });
       if (!this.gl) {
@@ -162,7 +170,12 @@ export class ShaderPass {
       const location = gl.getUniformLocation(this.program, name);
       if (location !== null) {
         if (typeof value === 'number') {
-          gl.uniform1f(location, value);
+          // Check if the variable name implies an integer (like lonRes, mMax, lMax)
+          if (name === 'lonRes' || name === 'latRes' || name === 'mMax' || name === 'lMax' || name === 'K') {
+              gl.uniform1i(location, value);
+          } else {
+              gl.uniform1f(location, value);
+          }
         } else if (Array.isArray(value) && value.length === 2) {
           gl.uniform2fv(location, value);
         }

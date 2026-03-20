@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GPU Physics Tests</title>
+</head>
+<body>
+    <div id="status">Running Tests...</div>
+    <div id="results"></div>
+
+    <script type="module">
+        import { GPGPU, ShaderPass, PingPongFBO } from '../../src/gpgpu.js';
+        import { SHT } from '../../src/sht.js';
+        import { NSSolver } from '../../src/solver.js';
+
+        const results = [];
+        const statusDiv = document.getElementById('status');
+        const resultsDiv = document.getElementById('results');
+
+        function appendResult(id, passed, msg) {
+            results.push({ id, passed, msg });
+            const p = document.createElement('p');
+            p.style.color = passed ? 'green' : 'red';
+            p.innerText = `[${id}] ${passed ? 'PASS' : 'FAIL'} - ${msg}`;
+            resultsDiv.appendChild(p);
+            console.log(p.innerText);
+        }
+
+        async function runTests() {
+            try {
+                // Initialize WebGL context
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 256;
+                const gl = canvas.getContext('webgl2', { antialias: false, preserveDrawingBuffer: true });
+                if (!gl) throw new Error("WebGL2 not supported");
+
+                const gpgpu = new GPGPU(gl);
+
+                // Use a smaller resolution for tests to run faster but still physically meaningful
+                const lMax = 16;
+                const lonRes = 48;
+                const latRes = 24;
+
+                const sht = new SHT(gpgpu, latRes, lonRes);
+                const solver = new NSSolver(gpgpu, sht);
+
+                const setupInitialGrid = (presetFunc) => {
+                    const grid = new Float32Array(lonRes * latRes * 4);
+                    for (let j = 0; j < latRes; j++) {
+                        const theta = (j + 0.5) * Math.PI / latRes;
+                        for (let i = 0; i < lonRes; i++) {
+                            const phi = i * 2.0 * Math.PI / lonRes;
+                            const idx = (j * lonRes + i) * 4;
+                            grid[idx] = presetFunc(theta, phi);
+                        }
+                    }
+                    const tex = gpgpu.createTexture(lonRes, latRes, grid);
+                    const spec = sht.forwardTransform(tex);
+
+                    const stateFBO = new PingPongFBO(gpgpu, sht.mMax, sht.lMax);
+                    const pass = new ShaderPass(gpgpu, `#version 300 es
+                        precision highp float;
+                        in vec2 v_uv;
+                        out vec4 outColor;
+                        uniform sampler2D tex;
+                        void main() { outColor = texture(tex, v_uv); }
+                    `);
+                    pass.render(stateFBO.writeFBO, sht.mMax, sht.lMax, {}, { tex: spec.tex });
+                    stateFBO.swap();
+
+                    gpgpu.gl.deleteTexture(tex);
+                    gpgpu.gl.deleteFramebuffer(spec.fbo);
+                    gpgpu.gl.deleteTexture(spec.tex);
+
+                    return stateFBO;
+                };
+
+                const calcEnergy = (stateFBO) => {
+                    const gridResult = sht.inverseTransform(stateFBO.read);
+                    const raw = gpgpu.readPixels(gridResult.fbo, lonRes, latRes);
+                    const floats = new Float32Array(raw.buffer);
+                    let energy = 0;
+                    for(let i=0; i < lonRes * latRes; i++) {
+                        energy += floats[i * 4] * floats[i * 4];
+                    }
+                    gpgpu.gl.deleteFramebuffer(gridResult.fbo);
+                    gpgpu.gl.deleteTexture(gridResult.tex);
+                    return energy / (lonRes * latRes);
+                };
+
+                // PT-01: Inviscid Limit (Energy/Enstrophy Conservation)
+                // nu = 0.
+                let stateFBO = setupInitialGrid(() => (Math.random() - 0.5));
+                let initEnergy = calcEnergy(stateFBO);
+
+                for(let step=0; step<10; step++) solver.step(stateFBO, 0.01, 0.0);
+
+                let finalEnergy = calcEnergy(stateFBO);
+                // In exact math, energy is perfectly conserved. With truncation and finite precision it fluctuates slightly.
+                let diff01 = Math.abs(finalEnergy - initEnergy) / initEnergy;
+                appendResult('PT-01', diff01 < 0.1, `Inviscid Limit (diff: ${(diff01*100).toFixed(2)}%)`);
+
+                // PT-03: Solid Body Rotation
+                // zeta = -2 omega cos(theta). It should remain perfectly static over time.
+                const omega = 1.0;
+                stateFBO = setupInitialGrid((theta, phi) => -2.0 * omega * Math.cos(theta));
+                initEnergy = calcEnergy(stateFBO);
+
+                // Read original spectral
+                const initialSpec = new Float32Array(gpgpu.readPixels(stateFBO.readFBO, sht.mMax, sht.lMax).buffer);
+
+                for(let step=0; step<10; step++) solver.step(stateFBO, 0.01, 0.0);
+
+                const finalSpec = new Float32Array(gpgpu.readPixels(stateFBO.readFBO, sht.mMax, sht.lMax).buffer);
+
+                let maxSpecDiff = 0;
+                for(let i=0; i<initialSpec.length; i++) {
+                    let d = Math.abs(initialSpec[i] - finalSpec[i]);
+                    if (d > maxSpecDiff) maxSpecDiff = d;
+                }
+
+                // Solid body rotation shouldn't produce nonlinear terms
+                appendResult('PT-03', maxSpecDiff < 1e-3, `Solid Body Rotation immutability (max diff: ${maxSpecDiff.toExponential(2)})`);
+
+                // PT-04: Rossby-Haurwitz Wave
+                // Use a basic spherical harmonic to ensure no blow-up
+                stateFBO = setupInitialGrid((theta, phi) => Math.cos(theta) + Math.pow(Math.sin(theta), 4) * Math.cos(4.0 * phi));
+
+                let blowUp = false;
+                for(let step=0; step<20; step++) {
+                    solver.step(stateFBO, 0.01, 1e-4);
+                    let e = calcEnergy(stateFBO);
+                    if (!Number.isFinite(e) || e > 1e3) {
+                        blowUp = true;
+                        break;
+                    }
+                }
+                appendResult('PT-04', !blowUp, `Rossby-Haurwitz stability over time`);
+
+                statusDiv.innerText = 'Tests Completed';
+                statusDiv.dataset.completed = "true";
+                statusDiv.dataset.failed = results.filter(r => !r.passed).length;
+            } catch (err) {
+                appendResult('ERROR', false, err.message);
+                statusDiv.innerText = 'Tests Completed with Error';
+                statusDiv.dataset.completed = "true";
+                statusDiv.dataset.failed = "1";
+                console.error(err);
+            }
+        }
+
+        // Run tests immediately
+        runTests();
+    </script>
+</body>
+</html>
