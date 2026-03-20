@@ -3,7 +3,15 @@ export class GPGPU {
     if (glContext) {
       this.gl = glContext;
     } else {
-      const canvas = document.createElement('canvas');
+      let canvas;
+      if (typeof document !== 'undefined') {
+        canvas = document.createElement('canvas');
+      } else if (typeof OffscreenCanvas !== 'undefined') {
+        canvas = new OffscreenCanvas(256, 256);
+      } else {
+        throw new Error("Neither HTMLCanvasElement nor OffscreenCanvas is supported");
+      }
+
       // Request WebGL 2.0
       this.gl = canvas.getContext('webgl2', { antialias: false, preserveDrawingBuffer: true });
       if (!this.gl) {
