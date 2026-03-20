@@ -12,6 +12,7 @@
   - **方案:** 将 WASM 计算出的网格空间（Grid Space）数据（如速度场 $u, v$ 或涡量 $\zeta$）作为浮点纹理（Float Texture）上传至 GPU，通过自定义 Shader 映射到 3D 球体模型上。
 - **UI 与交互:** React。
   - **方案:** 使用 React 进行应用级别的状态管理和组件化开发，配合 lil-gui 构建悬浮控制面板进行核心参数的实时调节。
+- **依赖管理:** uv project manager + toml 进行依赖管理。
 
 ## 2. 系统架构设计
 
