@@ -5,28 +5,40 @@ from kivy.properties import ObjectProperty, BooleanProperty
 from kivy.core.window import Window
 
 # Basic Shader for colormapping a single channel float texture
+# Kivy's $HEADER$ already declares vPosition, vTexCoords0, proj_mat, modelview_mat for VS
+# and texture0 for FS in GLSL 1.20 (actually it injects uniforms and attributes automatically for RenderContext)
+# Kivy RenderContext uses a specific shader header.
+# We completely override the vertex shader without $HEADER$ because
+# Kivy's $HEADER$ hardcodes vPosition as vec2 but we need vec3.
 colormesh_vs = '''
-$HEADER$
-in vec3 vPosition;
-in vec2 vTexCoords0;
-out vec2 frag_tex_coords;
+#ifdef GL_ES
+    precision highp float;
+#endif
 
-uniform mat4 modelview_mat;
-uniform mat4 proj_mat;
+/* Outputs to the fragment shader */
+varying vec4 frag_color;
+varying vec2 tex_coord0;
+
+/* vertex attributes */
+attribute vec3     vPosition;
+attribute vec2     vTexCoords0;
+
+/* uniform variables */
+uniform mat4       modelview_mat;
+uniform mat4       projection_mat;
+uniform vec4       color;
 
 void main(void) {
-    frag_tex_coords = vTexCoords0;
+    // If color is uninitialized by Kivy, fallback to white to prevent invisibility
+    frag_color = vec4(1.0, 1.0, 1.0, 1.0);
+    tex_coord0 = vTexCoords0;
     vec4 pos = vec4(vPosition.xyz, 1.0);
-    gl_Position = proj_mat * modelview_mat * pos;
+    gl_Position = projection_mat * modelview_mat * pos;
 }
 '''
 
 colormesh_fs = '''
 $HEADER$
-in vec2 frag_tex_coords;
-out vec4 fragColor;
-
-uniform sampler2D texture0;
 uniform float data_min;
 uniform float data_max;
 
@@ -47,7 +59,7 @@ vec3 colormap(float t) {
 
 void main(void) {
     // Read the single float value from the Red channel
-    float val = texture(texture0, frag_tex_coords).r;
+    float val = texture2D(texture0, tex_coord0).r;
 
     // Normalize value
     float range = data_max - data_min;
@@ -56,10 +68,11 @@ void main(void) {
         norm_val = clamp((val - data_min) / range, 0.0, 1.0);
     }
 
-    vec3 color = colormap(norm_val);
-    fragColor = vec4(color, 1.0);
+    vec3 mapped_color = colormap(norm_val);
+    gl_FragColor = vec4(mapped_color, 1.0) * frag_color;
 }
 '''
+
 
 class MeshRenderer(Widget):
     """
@@ -91,6 +104,8 @@ class MeshRenderer(Widget):
             self.canvas['texture0'] = 0
             self.canvas['data_min'] = self.data_min
             self.canvas['data_max'] = self.data_max
+            if self.mesh:
+                self.mesh.texture = value
 
     def _on_wireframe(self, instance, value):
         self.wireframe_lines.clear()
@@ -273,7 +288,7 @@ class MeshRenderer(Widget):
         modelview.rotate(np.radians(t), 0, 1, 0) # Rotate around Y
         modelview.rotate(np.radians(20), 1, 0, 0) # Tilt down a bit
 
-        self.canvas['proj_mat'] = proj
+        self.canvas['projection_mat'] = proj
         self.canvas['modelview_mat'] = modelview
 
         if self.texture:

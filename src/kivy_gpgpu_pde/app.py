@@ -67,40 +67,51 @@ class S3FluidApp(App):
         self.numpy_sht = NumPySHT(self.l_max)
         self.gpu_sht = GPUSHT(self.numpy_sht)
 
-        # We need physical equations (e.g. convective term)
-        # But for full GPGPU, we need the Shader RHS.
-        # Since Phase 3 provided NavierStokesRHS (pure python) and presumably the shader versions
-        # We will use what's available or set up a placeholder FBO update loop
-        # We use a dummy FBO just to see the mesh
-        self.state_fbo = FloatFbo(self.numpy_sht.n_lon, self.numpy_sht.n_lat)
+        # Setup Physics and Integrator
+        # To ensure we have a working physics loop for Phase 4 rendering verification,
+        # we will use the pure Python NumPy_RHS inside a generic RK4 Integrator since Shader RHS
+        # might still be incomplete from Phase 3 or difficult to wire entirely in Kivy
+        # without actual FBO ping-pong classes.
+        self.physics = NavierStokesRHS(self.numpy_sht, nu=1e-4)
 
-        # Initialize some dummy data (e.g., spherical harmonic Y_3^2)
-        grid = np.zeros((self.numpy_sht.n_lat, self.numpy_sht.n_lon), dtype=np.float32)
+        # We'll step the coefficients themselves for simplicity in Phase 4.
+        self.state_fbo = FloatFbo(size=(self.numpy_sht.n_lon, self.numpy_sht.n_lat))
 
+        # Initialize initial vorticity field (e.g., spherical harmonic Y_3^2)
         lats = self.numpy_sht.lats[:, np.newaxis]
         lons = self.numpy_sht.lons[np.newaxis, :]
-        grid = np.sin(3 * lats) * np.cos(2 * lons)
+
+        # Creating a dynamic initial field
+        zeta_grid = np.sin(3 * lats) * np.cos(2 * lons)
+        self.current_coeffs = self.numpy_sht.forward_sht(zeta_grid)
 
         # Upload
-        # Fbo expects RGBA data for update_from_array
+        self._update_fbo_from_coeffs()
+        self.renderer.build_mesh(self.numpy_sht)
+
+    def _update_fbo_from_coeffs(self):
+        grid = self.numpy_sht.inverse_sht(self.current_coeffs)
         rgba_grid = np.zeros((self.numpy_sht.n_lat, self.numpy_sht.n_lon, 4), dtype=np.float32)
         rgba_grid[..., 0] = grid
-
-        # FloatFbo has an update method
-        self.state_fbo.update_from_array(rgba_grid)
-
-        self.renderer.build_mesh(self.numpy_sht)
+        self.state_fbo.write_pixels_float(rgba_grid)
         self.renderer.texture = self.state_fbo.texture
 
     def update(self, dt):
-        # Placeholder for RK step
+        # Perform 1 pure python RK4 step on the spectral coefficients
+        k1 = self.physics.numpy_nonl(self.current_coeffs)
+        k2 = self.physics.numpy_nonl(self.current_coeffs + 0.5 * self.dt * k1)
+        k3 = self.physics.numpy_nonl(self.current_coeffs + 0.5 * self.dt * k2)
+        k4 = self.physics.numpy_nonl(self.current_coeffs + self.dt * k3)
+
+        self.current_coeffs += (self.dt / 6.0) * (k1 + 2*k2 + 2*k3 + k4)
         self.time += self.dt
+
+        self._update_fbo_from_coeffs()
 
         # Read back max velocity to compute CFL
         # For Phase 4, we approximate max velocity from the current vorticity grid
-        # In a full run, we would get u, v fields from the GPU.
         try:
-            rgba_array = self.state_fbo.get_array()
+            rgba_array = self.state_fbo.read_pixels_float()
             zeta_grid = rgba_array[..., 0]
             # Fast approximation: |u| ~ |zeta| / l_max (dimensionally)
             max_vel_approx = np.max(np.abs(zeta_grid)) / (self.l_max + 1)
@@ -109,7 +120,8 @@ class S3FluidApp(App):
             # dx on sphere is roughly pi / n_lat
             dx = np.pi / self.numpy_sht.n_lat
             cfl = (max_vel_approx * self.dt) / dx
-        except Exception:
+        except Exception as e:
+            print(f"Failed to calculate CFL: {e}")
             cfl = 0.0
 
         self.lbl_info.text = f"CFL: {cfl:.3f}\nTime: {self.time:.3f}"
@@ -139,9 +151,9 @@ class S3FluidApp(App):
         print(f"Switching resolution from l_max={self.l_max} to l_max={new_l_max}")
 
         # 2. Download vorticity field zeta using fbo.pixels
-        # We need the current grid data as a float array. We use FloatFbo's get_array
+        # We need the current grid data as a float array. We use FloatFbo's read_pixels_float
         try:
-            rgba_array = self.state_fbo.get_array()
+            rgba_array = self.state_fbo.read_pixels_float()
             zeta_grid = rgba_array[..., 0] # Extract the real physical field
 
             # 3. Get spectral coefficients zeta_{lm}^{old} with sht_old.forward_sht
@@ -189,10 +201,10 @@ class S3FluidApp(App):
             new_zeta_grid = np.sin(3 * lats) * np.cos(2 * lons)
 
         # Initialize new FBO
-        self.state_fbo = FloatFbo(self.numpy_sht.n_lon, self.numpy_sht.n_lat)
+        self.state_fbo = FloatFbo(size=(self.numpy_sht.n_lon, self.numpy_sht.n_lat))
         rgba_grid_new = np.zeros((self.numpy_sht.n_lat, self.numpy_sht.n_lon, 4), dtype=np.float32)
         rgba_grid_new[..., 0] = new_zeta_grid
-        self.state_fbo.update_from_array(rgba_grid_new)
+        self.state_fbo.write_pixels_float(rgba_grid_new)
 
         # 8. Update Mesh and start simulation again
         self.renderer.build_mesh(self.numpy_sht)
