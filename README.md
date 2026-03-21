@@ -4,7 +4,9 @@
       Includes `NumPySHT` with forward, inverse, and inverse-gradient SHT functions perfectly passing unit tests (testing against $L_2$ errors < $1e^{-10}$).
 - [x] Phase 2: GPU Arrays & Kivy Shader mapping.
       Implemented GL_RGBA32F mapping utilizing ctypes. Translated matrix operations to `forward_sht.glsl`, `inverse_sht.glsl`, and `inverse_sht_grad.glsl` via accurate `texelFetch` sampling.
-- [ ] Phase 3: Physical Module Integration & Pluggable Integrator.
+- [x] Phase 3: Physical Module Integration & Pluggable Integrator.
+      Implemented specific physical Shader logic (e.g. nonlinear convective term `convection.glsl`) and pure Python RHS `NavierStokesRHS` for baseline comparison.
+      Implemented pluggable RK3/RK4 time-stepping state machine decoupled from pure physics.
 - [ ] Phase 4: Rendering & Dynamic Res Switching.
 
 ## How to Test
