@@ -3,3 +3,8 @@
 /__pycache__
 **/*.xdmf
 **/*.h5
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+uv.lock
