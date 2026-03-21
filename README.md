@@ -2,7 +2,8 @@
 ## Development Progress
 - [x] Phase 1: Infrastructure and Custom NumPy-SHT implementation.
       Includes `NumPySHT` with forward, inverse, and inverse-gradient SHT functions perfectly passing unit tests (testing against $L_2$ errors < $1e^{-10}$).
-- [ ] Phase 2: GPU Arrays & Kivy Shader mapping.
+- [x] Phase 2: GPU Arrays & Kivy Shader mapping.
+      Includes float32 FBO wrappers `GPGPUFbo` and ctypes based GL readers/writers `gl_utils`. Includes `SHT_GPU` rendering context configurations for SHT passes. Passes UT-01 to UT-06.
 - [ ] Phase 3: Physical Module Integration & Pluggable Integrator.
 - [ ] Phase 4: Rendering & Dynamic Res Switching.
 
