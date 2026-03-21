@@ -1,0 +1,14 @@
+[project]
+name = "app"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "kivy>=2.3.1",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.3",
+    "pytest>=9.0.2",
+    "scipy>=1.17.1",
+    "shtns>=3.7.5",
+]
