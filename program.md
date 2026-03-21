@@ -1,253 +1,211 @@
-# **基于 Python \+ Kivy 的球面谱方法非线性 PDE (GPGPU) 可视化模拟器开发文档**
+# 基于 Python + Kivy 的球面谱方法非线性 PDE (GPGPU) 可视化模拟器开发文档
 
-## **1\. 项目概述**
+## 1. 项目概述
 
 本项目旨在开发一个基于 Python 桌面端/移动端跨平台框架 Kivy 的球面谱方法二维非线性 PDE（偏微分方程，包含湍流等）模拟器。通过 GPGPU 技术实现极高计算性能，并利用 OpenGL 实现从计算到渲染的“零拷贝”管线，支持多种时间积分格式（如 RK3, RK4）的动态切换。
 
-### **1.1 技术栈选型**
+### 1.1 技术栈选型
 
-* **核心语言与界面:** Python 3.12 & Kivy 2.3+。利用 Kivy 的 Properties 系统进行响应式状态管理，使用 Kivy Canvas API 构建跨平台 UI。  
-* **计算与渲染引擎:** Kivy 的底层图形 API (kivy.graphics, RenderContext, Fbo) 结合原生 GLSL着色器。  
-  * **GPGPU 方案:** 利用 OpenGL 的 **帧缓冲对象 (FBO)** 和 **32位浮点纹理 (GL\_RGBA32F)**。  
-  * **零拷贝 (Zero-Copy):** 流体状态全部存储在 GPU 显存（VRAM）中，计算阶段的输出纹理直接作为 Kivy 3D 网格（Mesh）的贴图材质进行渲染，无需经历从 GPU 读取到 CPU 再传回 GPU 的性能损耗。  
-* **科学计算辅助 (预计算与测试):** NumPy / SciPy 以及 **shtns** 库。利用 shtns 在 CPU 端预生成标准的高斯-勒让德（Gauss-Legendre）网格节点、勒让德多项式权重、拉普拉斯算子特征值矩阵，并作为参考基准验证 GPU 计算精度。
+- **核心语言与界面**: Python 3.12 & Kivy 2.3+。利用 Kivy 的 Properties 系统进行响应式状态管理，使用 Kivy Canvas API 构建跨平台 UI。
+- **计算与渲染引擎**: Kivy 的底层图形 API (`kivy.graphics`, `RenderContext`, `Fbo`) 结合原生 GLSL 着色器。
+- **GPGPU 方案**: 利用 OpenGL 的 帧缓冲对象 (FBO) 和 32 位浮点纹理 (`GL_RGBA32F`)。
+- **零拷贝 (Zero-Copy)**: 流体状态全部存储在 GPU 显存（VRAM）中，计算阶段的输出纹理直接作为 Kivy 3D 网格（Mesh）的贴图材质进行渲染，无需经历从 GPU 读取到 CPU 再传回 GPU 的性能损耗。
+- **科学计算辅助 (预计算与测试)**: NumPy / SciPy 以及 `shtns` 库。利用 `shtns` 在 CPU 端预生成标准的高斯-勒让德（Gauss-Legendre）网格节点、勒让德多项式权重、拉普拉斯算子特征值矩阵，并作为参考基准验证 GPU 计算精度。
 
-### **1.2 开发原则**
+### 1.2 开发原则
 
-* **显式扩展校验**：Kivy 启动时，必须探测底层的 OpenGL 环境。若缺乏 GL\_ARB\_texture\_float 或 GL\_EXT\_color\_buffer\_float，应立即弹出 Kivy 致命错误弹窗并终止，严禁静默退化。  
-* **独立测试原则 (Independent GPU Testing)**：GPU 计算如同“黑盒”，极易出现由于纹理坐标偏移、精度截断或矩阵维度错位导致的隐蔽数学错误。**对于 SHT（正反变换）、拉普拉斯/逆算子、梯度算子 (synth\_grad)、非线性对流项等每一个独立运行在 GPU 上的 Shader 计算模块，必须在实现后立刻编写测试用例。** 严禁不经验证直接组装。  
-* **状态快照与断言**：测试的核心手段是利用 glReadPixels 或 Kivy 的 texture.pixels 将 VRAM 数据读回为 NumPy 数组，与 CPU (shtns 和 NumPy) 的基准计算结果进行严苛的误差 ![][image1] 范数或 ![][image2] 范数校验。  
-* **策略模式集成 (Strategy Pattern)**：时间步进器（Time Stepper）必须抽象为独立接口，使得 RK3、RK4 乃至 Euler 格式可以在运行时无缝切换，管线应自动管理所需中间态的 FBO 数量。  
-* **显存泄漏防范**：Python 垃圾回收机制不管理 GPU 资源。重建网格或切换算法时，必须显式调用 Kivy Fbo 和 Texture 的 release() 方法释放 VRAM。
+- **显式扩展校验**: Kivy 启动时，必须探测底层的 OpenGL 环境。若缺乏 `GL_ARB_texture_float` 或 `GL_EXT_color_buffer_float`，应立即弹出 Kivy 致命错误弹窗并终止，严禁静默退化。
+- **独立测试原则 (Independent GPU Testing)**: GPU 计算如同“黑盒”，极易出现由于纹理坐标偏移、精度截断或矩阵维度错位导致的隐蔽数学错误。对于 SHT（正反变换）、拉普拉斯/逆算子、梯度算子 (`synth_grad`)、非线性对流项等每一个独立运行在 GPU 上的 Shader 计算模块，必须在实现后立刻编写测试用例。严禁不经验证直接组装。
+- **状态快照与断言**: 测试的核心手段是利用 `glReadPixels` 或 Kivy 的 `texture.pixels` 将 VRAM 数据读回为 NumPy 数组，与 CPU (`shtns` 和 NumPy) 的基准计算结果进行严苛的误差 $L_2$ 范数或 $L_\infty$ 范数校验。
+- **策略模式集成 (Strategy Pattern)**: 时间步进器（Time Stepper）必须抽象为独立接口，使得 RK3、RK4 乃至 Euler 格式可以在运行时无缝切换，管线应自动管理所需中间态的 FBO 数量。
+- **显存泄漏防范 (Crucial)**: Python 垃圾回收机制不管理 GPU 资源。重建网格或切换分辨率时，必须显式调用 Kivy `Fbo` 和 `Texture` 的 `release()` 方法彻底释放旧的 VRAM 资源。
 
-### **1.3 环境依赖与构建工具**
+### 1.3 环境依赖与构建工具
 
-本项目采用 **uv** 作为极速的 Python 包管理器和虚拟环境管理工具，放弃传统的 pip 和 requirements.txt，转而使用标准的 pyproject.toml 文件来统一管理依赖配置。
+本项目采用 `uv` 作为极速的 Python 包管理器和虚拟环境管理工具，放弃传统的 `pip` 和 `requirements.txt`，转而使用标准的 `pyproject.toml` 文件来统一管理依赖配置。
 
-**pyproject.toml 示例:**
+`pyproject.toml` 示例:
 
-\[project\]  
-name \= "kivy-gpgpu-pde"  
-version \= "0.1.0"  
-description \= "基于 Kivy 和 GPGPU 的球面谱方法 PDE 模拟器"  
-readme \= "README.md"  
-requires-python \= "==3.12.\*"  
-dependencies \= \[  
-    "kivy\>=2.3.0",  
-    "numpy\>=1.26.0",  
-    "scipy\>=1.12.0",  
-    "shtns\>=3.6",  
-    "matplotlib\>=3.8.0", \# 用于测试验证阶段的断言与可视化  
-\]
+```toml
+[project]
+name = "kivy-gpgpu-pde"
+version = "0.1.0"
+description = "基于 Kivy 和 GPGPU 的球面谱方法 PDE 模拟器"
+readme = "README.md"
+requires-python = "==3.12.*"
+dependencies = [
+    "kivy>=2.3.0",
+    "numpy>=1.26.0",
+    "scipy>=1.12.0",
+    "shtns>=3.6",
+    "matplotlib>=3.8.0", # 用于测试验证阶段的断言与可视化
+]
 
-\[build-system\]  
-requires \= \["hatchling"\]  
-build-backend \= "hatchling.build"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-\[tool.uv\]  
-\# uv 的专属配置，如果遇到 shtns 等包构建问题，可在此处配置系统级依赖的编译选项
+[tool.uv]
+# uv 的专属配置，如果遇到 shtns 等包构建问题，可在此处配置系统级依赖的编译选项
+```
 
-**环境初始化流程:**
+环境初始化流程:
+1. **安装 uv 工具**: `curl -LsSf https://astral.sh/uv/install.sh | sh` (或参考官方文档安装)。
+2. **创建并同步环境**: 在项目根目录下执行 `uv sync`，`uv` 将自动创建 `.venv` (Python 3.12) 并急速安装所有 dependencies。
+3. **激活环境**: `source .venv/bin/activate` (Linux/macOS) 或 `.venv\Scripts\activate` (Windows)。
 
-1. 安装 uv 工具：curl \-LsSf https://astral.sh/uv/install.sh | sh (或参考官方文档安装)。  
-2. 创建并同步环境：在项目根目录下执行 uv sync，uv 将自动创建 .venv (Python 3.12) 并急速安装所有 dependencies。  
-3. 激活环境：source .venv/bin/activate (Linux/macOS) 或 .venv\\Scripts\\activate (Windows)。
+## 2. 系统架构设计
 
-## **2\. 系统架构设计**
-
-### **2.1 模块划分 (Kivy GPGPU 管线)**
+### 2.1 模块划分 (Kivy GPGPU 管线)
 
 系统被划分为四个高度解耦的模块：
 
-* **初始化调度器 (Initialization Manager):**  
-  * 利用 shtns.set\_grid() 生成初始**高斯-勒让德网格 (Gauss-Legendre Grid)** 的纬度 (lats) 和经度 (lons)。  
-  * 预生成 ![][image3] 阶高斯谱滤波器 ![][image4] 用于去混叠（De-aliasing）。  
-  * 将这些预计算的变换矩阵、滤波系数、拉普拉斯特征值转换为 kivy.graphics.texture.Texture，上传至 GPU。  
-* **球面谐波变换组件 (SHT Component):**  
-  * 封装一对相互可逆的 Shader Passes：  
-  * **Forward SHT (物理** ![][image5] **谱):** 将网格空间的非线性对流项 ![][image6] 积分转换为谱系数 ![][image7]。基于纹理矩阵乘法。  
-  * **Inverse SHT 与求导 (谱** ![][image5] **物理):**  
-    * 将涡量谱 ![][image8] 映射为网格数据。  
-    * 从 ![][image8] 计算流函数谱 ![][image9]。  
-    * 执行 synth\_grad 的等效 Shader 操作，求取流函数梯度（即速度场 ![][image10]）和涡量梯度 ![][image11]，输出至物理空间用于非线性项拼接。  
-* **动态时间积分器 (Pluggable Time Integrator):**  
-  * 采用状态机和 FBO 池（FBO Pool）管理 Ping-Pong 渲染。  
-  * **RK3 格式:** 动态分配/激活 3 个中间态 FBO，执行 3 次 Shader Pass 更新。  
-  * **RK4 格式:** 动态分配/激活 4 个中间态 FBO，执行 4 次 Shader Pass 更新（如 demo 中 k1 到 k4 的显式推进）。  
-* **3D 渲染器 (Zero-Copy Renderer):**  
-  * 自定义 Kivy RenderContext。  
-  * **同构网格渲染 (Isomorphic Mesh):** 直接复用 CPU 端 shtns 导出的高斯-勒让德网格 lats 和 lons 数组，精确构建 Kivy 的 3D Mesh 顶点。实现 3D 几何顶点与 GPU 计算纹理像素的 1:1 严格对齐。  
-  * 将最新的物理场 FBO 纹理绑定到 Mesh 上，应用伪彩着色器（Colormap Shader）。
+1. **初始化调度器 (Initialization Manager)**:
+   - 具备 Teardown & Rebuild 能力，响应运行时动态分辨率切换。
+   - 利用 `shtns.set_grid()` 生成初始高斯-勒让德网格 (Gauss-Legendre Grid) 的纬度 (lats) 和经度 (lons)。
+   - 预生成 $8$ 阶高斯谱滤波器 $\exp(-36.0 \cdot (l / l_{max})^{8.0})$ 用于去混叠（De-aliasing）。
+   - 将这些预计算的变换矩阵、滤波系数、拉普拉斯特征值转换为 `kivy.graphics.texture.Texture`，上传至 GPU。
 
-### **2.2 伪谱法数学模型在 GPU 上的映射**
+2. **球面谐波变换组件 (SHT Component)**:
+   - 封装一对相互可逆的 Shader Passes：
+     - **Forward SHT (物理 $\rightarrow$ 谱)**: 将网格空间的非线性对流项 $N(\zeta)$ 积分转换为谱系数 $\hat{N}_{lm}$。基于纹理矩阵乘法。
+     - **Inverse SHT 与求导 (谱 $\rightarrow$ 物理)**:
+       - 将涡量谱 $\zeta_{lm}$ 映射为网格数据。
+       - 从 $\zeta_{lm}$ 计算流函数谱 $\psi_{lm}$。
+       - 执行 `synth_grad` 的等效 Shader 操作，求取流函数梯度（即速度场 $u_\theta, u_\phi$）和涡量梯度 $\nabla \zeta$，输出至物理空间用于非线性项拼接。
 
-方程定义为：![][image12]
+3. **动态时间积分器 (Pluggable Time Integrator)**:
+   - 采用状态机和 FBO 池（FBO Pool）管理 Ping-Pong 渲染。
+   - **RK3 格式**: 动态分配/激活 3 个中间态 FBO，执行 3 次 Shader Pass 更新。
+   - **RK4 格式**: 动态分配/激活 4 个中间态 FBO，执行 4 次 Shader Pass 更新（如 demo 中 k1 到 k4 的显式推进）。
 
-* **拉普拉斯与逆算子:**  
-  * 算子 ![][image13] 在谱空间表现为对角矩阵乘法：![][image14]。  
-  * 流函数 ![][image15] 的求解即为逆算子：![][image16]。  
-  * 在 GPU 中表现为谱系数纹理（Spectral Texture）与预计算的一维度数 ![][image17] 纹理的逐像素乘法。  
-* **非线性对流项 (![][image18]):** 必须在物理网格空间计算。  
-  1. 在 GPU 谱空间求得 ![][image9]。  
-  2. 逆变换（带求导算子）到网格空间得到速度场 ![][image19] 以及涡量梯度 ![][image20]。  
-  3. 在网格空间执行逐像素计算：![][image21]。  
-  4. 正变换回谱空间，应用 ![][image3] 阶指数谱滤波器截断（取代单纯的高斯截断）以维持数值稳定性。
+4. **3D 渲染器 (Zero-Copy Renderer)**:
+   - 自定义 Kivy `RenderContext`。
+   - **同构网格渲染 (Isomorphic Mesh)**: 直接复用 CPU 端 `shtns` 导出的高斯-勒让德网格 lats 和 lons 数组，精确构建 Kivy 的 3D Mesh 顶点。实现 3D 几何顶点与 GPU 计算纹理像素的 1:1 严格对齐。
+   - 将最新的物理场 FBO 纹理绑定到 Mesh 上，应用伪彩着色器（Colormap Shader）。
 
-## **3\. 详细测试计划 (全模块覆盖)**
+### 2.2 伪谱法数学模型在 GPU 上的映射
+
+方程定义为：$\frac{\partial \zeta}{\partial t} = \nu \nabla^2 \zeta - \mathbf{u} \cdot \nabla \zeta$
+
+- **拉普拉斯与逆算子**:
+  - 算子 $\nabla^2$ 在谱空间表现为对角矩阵乘法：$-l(l+1)$。
+  - 流函数 $\psi$ 的求解即为逆算子：$\psi_{lm} = \zeta_{lm} / [-l(l+1)]$。
+  - 在 GPU 中表现为谱系数纹理（Spectral Texture）与预计算的一维度数 $l$ 纹理的逐像素乘法。
+
+- **非线性对流项 ($N(\zeta) = -\mathbf{u} \cdot \nabla \zeta$)**: 必须在物理网格空间计算。
+  1. 在 GPU 谱空间求得 $\psi_{lm}$。
+  2. 逆变换（带求导算子）到网格空间得到速度场 $u_\theta = \frac{1}{\sin\theta}\frac{\partial \psi}{\partial \phi}, u_\phi = -\frac{\partial \psi}{\partial \theta}$ 以及涡量梯度 $\frac{\partial \zeta}{\partial \theta}, \frac{1}{\sin\theta}\frac{\partial \zeta}{\partial \phi}$。
+  3. 在网格空间执行逐像素计算：$Adv = u_\theta \cdot \frac{\partial \zeta}{\partial \theta} + u_\phi \cdot \frac{1}{\sin\theta}\frac{\partial \zeta}{\partial \phi}$。
+  4. 正变换回谱空间，应用 $8$ 阶指数谱滤波器截断（取代单纯的高斯截断）以维持数值稳定性。
+
+### 2.3 核心 SHT 与代数算子的 GPU 实现指南
+
+为了在 GPU 上实现真正的“零拷贝”闭环计算，必须将 `shtns` 库中最核心的球面谐波变换及其相关函数翻译为 GPU 的 Shader Pass：
+
+1. **正向球面谐波变换 (`sht.analys` 的 GPU 映射)**
+   - **作用**: 将物理空间的网格数据（Grid）转换为谱空间的球谐系数（Spectral Coefficients）。
+   - **用途**: 在计算完非线性对流项（$u \cdot \nabla \zeta$）后，调用此模块将其从物理网格空间变回谱空间，以便与线性耗散项相加并在积分器中更新谱系数。
+   - **GPU 实现思路**: 在 Fragment Shader 中实现数值积分（离散傅里叶变换 + 高斯-勒让德求积）。输入为物理场 RGBA32F 纹理，采样预计算好的勒让德权重纹理，执行张量收缩/矩阵乘积，输出谱系数纹理（复数可拆分为实部和虚部存入不同通道）。
+
+2. **逆向球面谐波变换 (`sht.synth` 的 GPU 映射)**
+   - **作用**: 将谱空间的球谐系数还原为物理空间的网格数据。
+   - **用途**: 用于渲染前的状态提取，或者当需要直接在物理空间获取涡量场 $\zeta$ 的分布时使用。
+   - **GPU 实现思路**: 输入谱系数纹理，与预计算的勒让德多项式基函数纹理进行张量收缩/求和，输出网格场纹理。
+
+3. **带梯度的逆向变换 (`sht.synth_grad` 的 GPU 映射) (🌟 最核心且最复杂)**
+   - **作用**: 输入谱系数，直接在逆变换的同时计算出其在球面物理网格上的梯度分量。
+   - **用途**: 在求解 Navier-Stokes 方程中需调用两次：一是求速度场（从流函数谱系数 $\psi_{lm}$ 算出 $u_\phi, u_\theta$），二是求涡量梯度（从 $\zeta_{lm}$ 算出 $\nabla \zeta$ 分量）。
+   - **GPU 实现思路**: 严禁在粗糙的物理网格上用有限差分求导（精度太低且极点会产生奇点）。必须将勒让德多项式的导数项预先在 CPU 算好并作为纹理上传，在 Shader 中执行带有导数权重的逆变换矩阵乘法，输出一张包含 2 个通道（例如 R 通道存 $\partial / \partial \theta$，G 通道存 $1/\sin\theta \partial / \partial \phi$）的浮点纹理。
+
+4. **谱空间逐像素代数算子**
+   - **包含**: 流函数反演 (invlap)、计算耗散项 (lap)、应用高斯滤波截断 (spec_filter)。
+   - **GPU 实现思路**: 在 GPGPU 架构中，只需把 invlap、lap、spec_filter 作为一个 1D 或 2D 的浮点纹理初始化时传给 GPU。计算时只需用极简的 Shader 将状态系数纹理（如 zeta_coeffs）与这些算子纹理进行对应位置的“逐像素乘法”即可。
+
+## 3. 详细测试计划 (全模块覆盖)
 
 由于 GPU 编程的“黑盒”属性，所有的数学管线必须被拆解成独立的单元进行断言测试。开发必须遵循 TDD（测试驱动开发）的思想，先对比 CPU 实现，再进行管线组装。
 
-### **3.1 GPGPU 模块单元与集成测试矩阵**
+### 3.1 GPGPU 模块单元与集成测试矩阵
 
 | 测试用例 ID | 测试模块 (GPU Pass) | 测试内容描述与输入 | 验证基准 (Ground Truth) 与预期结果 |
-| :---- | :---- | :---- | :---- |
-| **UT-01** | **FBO 环境与精度** | 创建 32F FBO，通过 Shader 写入大动态范围数值（如 ![][image22] 到 ![][image23]），使用 fbo.pixels 读回。 | 与写入值之间的相对误差需 ![][image24] (单精度浮点极限)。 |
-| **UT-02** | **预计算数据纹理化** | 加载 CPU (shtns) 计算的勒让德矩阵序列、求积权重、拉普拉斯算子。 | 随机抽样验证 GPU 纹理的 RGBA 通道解包浮点数与 NumPy 原始数组完全一致。 |
-| **UT-03** | **正向 SHT 算子** (Forward SHT) | 输入：解析的网格场数据（如 ![][image25]）。 操作：网格空间积分映射到谱空间。 | 从 GPU 读回的谱系数 ![][image26] 必须与 shtns.analys(data) 计算的系数残差极小。 |
-| **UT-04** | **逆向 SHT 算子** (Inverse SHT) | 输入：解析分布的谱系数数组。 操作：执行勒让德多项式求和回到高斯网格。 | 从 GPU 读回的网格场必须与 shtns.synth(coeffs) 结果的误差 ![][image2] 范数在容许阈值内。 |
-| **UT-05** | **线性算子** (Laplacian) | 在 GPU 谱空间执行 ![][image27] 以及 ![][image28] (除以 ![][image14])。 | 读回结果必须与 NumPy 中的纯代数乘法完全对齐。 |
-| **UT-06** | **梯度算子** (synth\_grad) | 输入：给定的流函数谱系数 ![][image9]。 操作：在 Shader 中计算导数并执行 SHT 逆变换得到 ![][image29]。 | 读回的速度场必须与 shtns.synth\_grad(psi) 的结果一致，确保极点不出现奇点爆炸。 |
-| **UT-07** | **非线性对流项** (Grid Math) | 输入：由 Shader 生成的速度场和涡量梯度场。 操作：物理空间逐像素计算 ![][image30]。 | 与 NumPy 直接计算的相应矩阵点积+逐元素乘法结果精度对齐。 |
-| **UT-08** | **RHS 单步闭环** (RHS Closure) | 输入：初始涡量谱 ![][image8]。 操作：连贯执行 ![][image31] 滤波加耗散。 | **极度重要：** 单次右端项求值的结果，必须与 demo 代码中的 nonl(zeta\_coeffs) python 函数输出一致！ |
-| **UT-09** | **积分器切换** (Time Steppers) | 分别使用 RK3 和 RK4 积分器，对纯线性耗散方程 ![][image32] 步进相同时间 ![][image33]。 | RK4 结果的耗散率严格匹配解析解 ![][image34]，并比较 RK3 差异。且不允许任何显存泄漏。 |
+| :--- | :--- | :--- | :--- |
+| UT-01 | FBO 环境与精度 | 创建 32F FBO，通过 Shader 写入大动态范围数值（如 $10^{-8}$ 到 $10^5$），使用 `fbo.pixels` 读回转 NumPy 校验。 | 读回数值与写入值之间的相对误差 $< 10^{-6}$ (单精度极限)。 |
+| UT-02 | 预计算数据纹理化 | 加载 CPU (`shtns`) 计算的勒让德矩阵序列、求积权重、拉普拉斯算子。 | 随机抽样验证 GPU 纹理的 RGBA 通道解包浮点数与 NumPy 原始数组完全一致。 |
+| UT-03 | 正向 SHT 算子 (Forward SHT) | 输入：解析的网格场数据（如 $\cos^2(\theta)\sin(\phi)$）。 操作：网格空间积分映射到谱空间。 | 从 GPU 读回的谱系数 $\hat{f}_{lm}$ 必须与 `shtns.analys(data)` 计算的系数残差极小。 |
+| UT-04 | 逆向 SHT 算子 (Inverse SHT) | 输入：解析分布的谱系数数组。 操作：执行勒让德多项式求和回到高斯网格。 | 从 GPU 读回的网格场必须与 `shtns.synth(coeffs)` 结果的误差 $L_\infty$ 范数在容许阈值内。 |
+| UT-05 | 线性算子 (Laplacian) | 在 GPU 谱空间执行 $\zeta \rightarrow \nabla^2 \zeta$ 以及 $\zeta \rightarrow \psi$ (除以 $-l(l+1)$)。 | 读回结果必须与 NumPy 中的纯代数乘法完全对齐。 |
+| UT-06 | 梯度算子 (synth_grad) | 输入：给定的流函数谱系数 $\psi_{lm}$。 操作：在 Shader 中计算导数并执行 SHT 逆变换得到 $(u_\theta, u_\phi)$。 | 读回的速度场必须与 `shtns.synth_grad(psi)` 的结果一致，确保极点不出现奇点爆炸。 |
+| UT-07 | 非线性对流项 (Grid Math) | 输入：由 Shader 生成的速度场和涡量梯度场。 操作：物理空间逐像素计算 $u \cdot \nabla \zeta$。 | 与 NumPy 直接计算的相应矩阵点积+逐元素乘法结果精度对齐。 |
+| UT-08 | RHS 单步闭环 (RHS Closure) | 输入：初始涡量谱 $\zeta_{lm}$。 操作：连贯执行 $\zeta \rightarrow \psi \rightarrow u, \nabla\zeta \rightarrow N(\zeta) \rightarrow \hat{N}_{lm} \rightarrow$ 滤波加耗散。 | **极度重要**: 单次右端项求值的结果，必须与 demo 代码中的 `nonl(zeta_coeffs)` python 函数输出一致！ |
+| UT-09 | 积分器切换 (Time Steppers) | 分别使用 RK3 和 RK4 积分器，对纯线性耗散方程 $\frac{\partial \zeta}{\partial t} = \nu \nabla^2 \zeta$ 步进相同时间 $T$。 | RK4 结果的耗散率严格匹配解析解 $e^{-\nu l(l+1)T}$，并比较 RK3 差异。且不允许任何显存泄漏。 |
 
-## **4\. 数据流与 UI 交互设计 (Kivy 特性)**
+## 4. 数据流与 UI 交互设计 (Kivy 特性)
 
-### **4.1 零拷贝与精确纹理映射 (Zero-Copy & Exact Mapping)**
+### 4.1 零拷贝与精确纹理映射 (Zero-Copy & Exact Mapping)
 
-1. **计算阶段:** Clock.schedule\_interval 触发 update(dt)。写入内部 FBO (fbo\_pong)。  
-2. **获取纹理:** 提取 active\_texture \= fbo\_pong.texture。计算纹理尺寸严格为 ![][image35]。  
-3. **赋值渲染:** 将纹理绑定给同构高斯网格生成的 Mesh。  
-4. **无插值损耗:** 由于 3D 网格顶点的 UV 坐标正好落在计算纹理的像素中心（或通过 nearest 采样对齐），渲染时可以直接读取流体场的精确浮点数值进行伪彩映射，避免了传统投影插值带来的模糊和误差。
+- **计算阶段**: `Clock.schedule_interval` 触发 `update(dt)`。写入内部 FBO (`fbo_pong`)。
+- **获取纹理**: 提取 `active_texture = fbo_pong.texture`。计算纹理尺寸严格为 $N_{lon} \times N_{lat}$。
+- **赋值渲染**: 将纹理绑定给同构高斯网格生成的 Mesh。
+- **无插值损耗**: 由于 3D 网格顶点的 UV 坐标正好落在计算纹理的像素中心（或通过 nearest 采样对齐），渲染时可以直接读取流体场的精确浮点数值进行伪彩映射，避免了传统投影插值带来的模糊和误差。
 
-### **4.2 高斯网格渲染的极点与闭合处理 (Pole & Seam Handling)**
+### 4.2 高斯网格渲染：线框、极点与闭合处理
 
-高斯-勒让德网格为计算设计，在直接用于 3D 球面渲染时需要做拓扑修补：
+高斯-勒让德网格为计算设计，在直接用于 3D 球面渲染时需要做特殊的图形学处理：
 
-* **经度缝合线 (Longitude Seam):** 计算网格经度通常划分在 ![][image36]。为了在 3D 中无缝闭合，构建 Mesh 顶点时，需在经度方向额外复制一列起始顶点（令其物理位置重合），并分配 UV 坐标 ![][image37]。  
-* **两极孔洞 (Pole Hole):** 高斯求积节点**天然避开**绝对极点 ![][image38] 和 ![][image39]（防止计算域除以零）。这意味着直接渲染时，南北极会存在一个小圆孔。  
-  * **解决方案:** 在构建渲染 Mesh 时，手动在南北极处各增加一个顶点 ![][image40]。  
-  * **极点着色:** 将极点顶点的 UV 的 ![][image41] 坐标分别设为 ![][image42] 和 ![][image43]。在着色器中，Kivy 的纹理采样器由于设置为 clamp\_to\_edge，极点区域将平滑延续最接近的高斯纬度圈上的颜色，在视觉上完美闭合球体。
+- **经度缝合线 (Longitude Seam)**: 计算网格经度通常划分在 $[0, 2\pi-\Delta\phi]$。为了在 3D 中无缝闭合，构建 Mesh 顶点时，需在经度方向额外复制一列起始顶点（令其物理位置重合），并分配 UV 坐标 $U=1.0$。
+- **两极孔洞 (Pole Hole)**: 高斯求积节点天然避开绝对极点 $\theta=0$ 和 $\theta=\pi$（防止计算域除以零）。这意味着直接渲染时，南北极会存在一个小圆孔。
+  - **解决方案**: 在构建渲染 Mesh 时，手动在南北极处各增加一个顶点 $(0,0,\pm R)$。
+  - **极点着色**: 将极点顶点的 UV 的 $V$ 坐标分别设为 $0.0$ 和 $1.0$。在着色器中，Kivy 的纹理采样器由于设置为 `clamp_to_edge`，极点区域将平滑延续最接近的高斯纬度圈上的颜色，在视觉上完美闭合球体。
+- **线框高亮覆盖 (Wireframe Overlay)**: 为了在物理场颜色之上显示计算网格的边界，在 Kivy Canvas 中需将网格绘制两次。
+  1. 第一遍：使用 `mode='triangles'`，挂载 Colormap 着色器进行实体填充。
+  2. 第二遍：使用 `mode='lines'` 或 `mode='line_strip'`，取消纹理绑定，并设置单一纯黑材质（或黑色纯色着色器）重新绘制同构的 Mesh 顶点，以此实现网格边界的高亮叠加。
 
-### **4.3 Kivy UI 交互面板**
+### 4.3 Kivy UI 交互面板
 
 利用 Kivy 的布局 (Box/Grid Layout) 构建控制层（悬浮在 3D 渲染层之上）：
 
-* **仿真控制 (Simulation Properties):**  
-  * **运行/暂停:** ToggleButton 绑定 Clock.unschedule / Clock.schedule。  
-  * **积分格式选择:** Spinner (下拉菜单)，选项为 \['RK3', 'RK4', 'Euler'\]。切换时触发管线重构和 FBO 池清理。  
-  * **参数调节:** Slider 控制时间步长 ![][image44] (如 demo 的 0.5)，黏性系数 ![][image45] (如 demo 的 ![][image46])。数值变化通过 Kivy Properties 的 on\_value 回调直接同步到 Shader 的 Uniform 变量中。  
-* **性能与状态监控:** 实时通过 Clock.get\_fps() 提取帧率，并利用累加的动能积分公式在后台计算流体总能量（归一化为 ![][image47]），显示在界面的 Label 中，监控系统稳定性。
+- **仿真控制 (Simulation Properties)**:
+  - **运行/暂停**: `ToggleButton` 绑定 `Clock.unschedule` / `Clock.schedule`。
+  - **分辨率切换 (Resolution)**: `Spinner` (下拉菜单)，选项如 `['lmax=63 (Low)', 'lmax=127 (Med)', 'lmax=255 (High)']`。触发 4.4 节定义的动态分辨率切换机制。
+  - **积分格式选择**: `Spinner`，选项为 `['RK3', 'RK4', 'Euler']`。切换时重构 FBO 池。
+  - **参数调节**: `Slider` 控制时间步长 $dt$，黏性系数 $\nu$。通过 Kivy Properties 的 `on_value` 同步至 Shader Uniform。
+  - **网格线框开关 (Show Grid)**: `Switch` 控件。控制“第二遍绘制 Mesh”的颜色通道透明度，用于实时开启/关闭黑色网格线的覆盖显示。
 
-## **5\. 开发阶段里程碑**
+- **性能与状态监控 (Metrics Monitor)**:
+  - **帧率 (FPS)**: 实时通过 `Clock.get_fps()` 提取帧率。
+  - **能量监控 (Total Energy)**: 监控总动能 $E / E_0$。
+  - **CFL 数 (Courant-Friedrichs-Lewy Number)**: 在仿真循环中定期评估：$CFL = U_{max} \cdot \frac{\Delta t}{\Delta x_{min}}$。
 
-* **Phase 1: 环境构建与基础 GPGPU 设施 (Weeks 1-2)**  
-  * 使用 uv 初始化 Python 3.12 虚拟环境并配置 pyproject.toml。  
-  * 构建底层 FBO 包装类，封装 Kivy 中创建 GL\_RGBA32F FBO 的复杂逻辑。  
-  * 跑通最基础的 Ping-Pong 渲染循环并完成 **UT-01** 到 **UT-02**。  
-* **Phase 2: 谱计算核心与 GPU 张量化 (Weeks 3-4) (最难点)**  
-  * 在 CPU 端集成 shtns 实现高斯-勒让德网格初始化和谱基函数预计算。  
-  * 编写 Kivy Shader，实现正逆映射及 8阶指数滤波（spec\_filter）。  
-  * 完成求导管线与核心算子的 GPU 移植，强制通过 **UT-03** 到 **UT-06** 测试。  
-* **Phase 3: Navier-Stokes 组装与策略模式积分器 (Weeks 5-6)**  
-  * 实现非线性对流项的 GPU 计算逻辑。完成 **UT-07**。  
-  * 验证单步 PDE 积分，通过终极闭环测试 **UT-08**。  
-  * 编写 GPUIntegrator 架构实现 RK3/RK4，通过 **UT-09** 测试，并监控能量衰减曲线。  
-* **Phase 4: 3D 渲染、交互界面与性能调优 (Week 7\)**  
-  * **构建基于 CPU shtns 高斯经纬度直接导出的同构 Kivy 3D Mesh，并完成经度闭合与极点缝合。**  
-  * 接入 Colormap (如 demo 中的 RdBu\_r) 着色器完成速度场模长到颜色的映射。  
-  * 完成 Kivy UI 控件的数据绑定与联调。
+### 4.4 动态分辨率切换与谱插值机制 (Dynamic Resolution Switching)
 
-[image1]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABUAAAAYCAYAAAAVibZIAAABb0lEQVR4Xu2TO0vEUBCFs6CiWIlF2LxuAooYBIuUiqhY2Ghnoz/BzkbcRhDsxcJCtLaxtdJ/YGslCCJiIzaCjeLjm02icVgfCdrtgUPunTMzzJ2ZWFYb/wpjzBS8ha8FPsJj13X7tX8pkGQPvoRhOKu1SgiCoI+Ep/DS8zxX65VAsmF4Bw+5dmi9Eki2JL2k4lWtVQYJt+ETSce1VgmFfl5EUWRrvRJ+6mccx11JknTKmRXz8NuEOxQwgamm3FPk/YQrWgM17Bu+749IQl61znb0wEHO52iLOqAJk+5ny34SPIC2L4nQ5zjfU+FoFicVn9i23fsp6Lv9lCdj35WXyF2C8R/LW2HS4R7xs3QX4yRpgvBgVD+51yUh+hXfqBDShOM4PvYz2jL/bsR5BuON+fjXn+F1Rjnn9gNLDU8qJX4LLlhfDaoMspY04LTcZWBWi40pA9mE5WxgdQY2RD/XxK4dfw0STKrWCBvar42/wxtb+mH7skBzTAAAAABJRU5ErkJggg==>
+在运行时动态更改网格分辨率是一项高级特性。在基于网格的差分法中，这需要复杂的物理场双线性/双三次插值；但在谱方法中，这可以通过优雅的谱截断 (Spectral Truncation) 或 补零 (Zero-padding) 实现完美的数学重采样。由于此操作并不频繁（响应用户 UI 点击），为了管线稳定，该过程需由 CPU (`shtns`) 介入辅助完成：
 
-[image2]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAVCAYAAABc6S4mAAABh0lEQVR4Xu2UvS8EURTFdxIkGoICmdl9M5tpLIVkFCQaHwmJUqFQ6BUKEhKlRiglGqEUiWyjUqz/YCX+AomIaES5IsTH79p9TC5hd0ehcJKT9+49M+e+d+fuplL/+FMwxozAG/gS4wMsuK7boZ+vGxjuwmff9ye1lhiZTKYN8yK88DzP1XpiYNwDb2GesEHriYHxrPSem6xo7VeA+RZ8pMCw1hIj1v/zIAg6tZ4YP/U/l8s1RVHUqPNVw/YfLmoNOOTX0ul0nxaqhinP/5f9Z2RDtD3WZq1Vhe/mX9pCfkduaHP8CLuIt+EpXArDsEXycgDieXiM5/q7CUFEsmRU/4m7xRz9kjWImaxKLEQ7Yi2y9rLuU3yCx5xsNtsqxuMkr83Hf88TvKpQ9jZ/YAvzHQZ4b8weQozQT+A9nLb5usEJB2F/PIfxELyj8DKhE9dqBkYBBeZSFSO5AfEh+U1YYj9T0eovhNEURhuceIF9wd6I/agpt/dM2qbfqwkyXW8f8jMcBqFd9FdHNmef7pVJPwAAAABJRU5ErkJggg==>
+1. **暂停计算与状态捕获**: `Clock.unschedule` 暂停仿真器。利用 `fbo.pixels` 将当前的涡量场 $\zeta$ 从 GPU (旧分辨率) 下载回 CPU NumPy 数组。
+2. **CPU 提取当前谱系数**: 利用旧的 `shtns` 实例计算当前的谱系数：$\zeta_{lm}^{old} = \text{sht\_old.analys}(\zeta_{grid})$。
+3. **彻底清理 VRAM (Teardown)**: 调用 Kivy 的所有相关 `Fbo.release()`、`Texture.release()`，并清空当前的三维 Mesh 顶点，防止切换分辨率导致显存爆炸。
+4. **管线重建 (Rebuild)**:
+   - 以用户选定的新 $l_{max}$ 初始化新的 `shtns` 实例，获取新的 $N_{lat} \times N_{lon}$ 网格。
+   - 重新生成所有预计算纹理（勒让德权重、新拉普拉斯特征值等），上传至 GPU。
+   - 重新构建更高（或更低）面数的高斯 3D Mesh。
+   - 重新分配对应新尺寸的 FBO 池。
+5. **谱空间重采样 (Spectral Resampling)**:
+   - **如果分辨率升高 (Up-scaling)**: 创建全零的新谱系数数组 $\zeta_{lm}^{new}$，将 $\zeta_{lm}^{old}$ 的低频部分直接复制进去（高频部分补零）。
+   - **如果分辨率降低 (Down-scaling)**: 创建新的 $\zeta_{lm}^{new}$，直接截取 $\zeta_{lm}^{old}$ 中对应低频部分（高频部分自动截断丢弃）。
+6. **状态恢复与继续**: 利用新的 `shtns` 将 $\zeta_{lm}^{new}$ 还原到新的物理网格：$\zeta_{grid}^{new} = \text{sht\_new.synth}(\zeta_{lm}^{new})$。将其作为初始场上传至新建的 GPU FBO，恢复 `Clock.schedule` 继续执行。
 
-[image3]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAWCAYAAAD5Jg1dAAABDklEQVR4XmNgGEJARkaGU15ePgqIZwFxl5ycnBZQmBFFkZKSEj9Qch1QMg5ISyoqKuorKCgcArKLURQDBXKAuAqhlYFBVlZWByh2HogV4YJA3QuBuJMBSTfIZJBCkOlwhUCBViD+D8STxMXFuaGaw4H8raKiojxwhUBd8kD33YIqvgPVeBgkDlcEA0AJTaDiR1DF/0HOUVFR4YMrgAbLZqCicpiYtLS0DJC/EaopBywIcizUWk24bgaIAUDxHSCTwQJAjjFQ0TUgrYSsEASA4lVAPAnMAfkKqGsXEFcyIAUP0H2iQEUHgNgSJgayRgUocBGkAUhHQ026CoopZM0wwAxyBhCHAGPFDRaewxIAAIIhPl1+eE1YAAAAAElFTkSuQmCC>
+## 5. 开发阶段里程碑
 
-[image4]: <data:image/png;base64,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>
-
-[image5]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABMAAAAXCAYAAADpwXTaAAAAt0lEQVR4XmNgGAWjgDpAQUGBQ05OLk1UVJQHXY4cwCgvL98KNNAYXYIsADIIaGAvkMmCLkcOYAR6twBoaByIjSIDlBAA2iRJClZSUgKaJTcfyJ6soqLCBzZIXFycGyhQDcSzSMVAw3YA6a9A3Aw0kB3FhaQAWVlZE6Ahq6WlpWXQ5UgCQAOEgQYtVlRUlEeXIxkADcoChnMEujjJAJRogYZNlZGRkUaXIwcwqqur84JodIlRMMAAAJV7J+RoCL8jAAAAAElFTkSuQmCC>
-
-[image6]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACsAAAAYCAYAAABjswTDAAADVElEQVR4Xu2WT0hUURTGRzTofwjZoI5zHZ2QKGgxJEhBJAVF1KJNQW77sxCiIoJqEYhEBAXZH7MgWkgQ4iYCKSkpCKmgjZiQLgJ3UW0iqEX1++a9p2/OvDcjoYvADz7ee+c7995zzz333pdILOI/Qy6XW9LU1LTG2ktB/mpn7QsKDdrY2Hgnk8m0Wi1AfX19qq6ubm3YJn/nXP+cJonjDvgZ/hHT6fRQKpVaFujZbHY1QTwNdJ+DyWRyRaibKmw38TseshUB/ST977R2bB2wd64ZrmCwPvgL/oRt1gHbATgQnkgABtqFNlImOxrjApyEU/A8tioJ6pPvxxrDtCkGg1Uz6wc8TzgvczcwV4R9sJ2Ch8M2QQNpNdA6rRZAGcPnEryNXze8xfvWsA/jH8L+usyE83WzmcbXcK6FH+A0zIRctMx35Rey5UG7HNpHuMFqggJFuwLPJEwCwqCfJnwmeW6zWgGUMWZ2TO88LzovuzOZ0qbwM18928qD2uH7qqWlZZXVBPSD6H3l6lF7AL9heM5qBcDhqjKk94aGhk18f4OjwZJotnz3FLbyoEmI1i5QIlnavaP9RqtFQf3g35+IW4GgXkNHipb8IfyNfbcMfvaK6rWmpmYl9hHYbTXBX6Wi+o8DsZxVf+rXankE9ZoIdaggFayC9ndqZL0GwWoQq2nyaO/TEUdVHPxg30aVWx7KmDIXtmn5sY86rxzalfmoDkoF62+8cW0cq8XBD3aKxCStJujs66FOt1iBhh3O22jjBHvZ6kKZYPehfYK1VotDyTKIqNcZaHbOO8YUcFG9+lB9D8B7VsC2B/5wERdMHJx3Bg+b23FGbIeDBLvcaoK/Qb64mDNUQLsOn+C71NgzcBr7S72HtRholfvVX4FVRY/xu5u963XF7i1wSnjHGL5DUfUaAJ/9tB2LWB0Nfjo0xoT2hv41jF8e/iq/UX9Wmzc4L4MT6Zibh3JqQet1Xkko6LHm5uZ11g97m/PKbi6r8M9QBrtc+fO0kqCP4vdVJ4XRgj669G60+YX+UxnoRTr6pqrQTcazkud6/J7bo8m/6Yaxu7B9wcBArdTcI/vX5P/IdDrv3H6Gz3arM8n7bi6/h/MJBmxn4BPWXgr4H9GNae2LWGj8BS4F4WhuAdc8AAAAAElFTkSuQmCC>
-
-[image7]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACEAAAAZCAYAAAC/zUevAAACbUlEQVR4Xu2Wu2tUQRTG75IV4gsRXBf2NfuSNeCjWALxUUogCDZaBCwtbLRRVMQUopWdJIKFQrAJRCSNEhULExZC8B8IiKUIVmJppb/PO2OOQyCweyMW+eDj3vnOuefMzDlz702SzZFzzl2Hq+VyuRIb/wVytVrtZr1ef84kLsJeo9FwsdOWgoTHSXyn2+3u0LharY4ynuJ2KHLdRvYolUoHVHf40/MbJThifdQjxi5+rlQqR61PJiDxOYJ/VxKa8m5s1ynBtoLtcGzLDEoML2uVcI0GLVq7b9gn3OatnhmKxeJuEjz1q33kd2PS+rj0uF6zWqag5k2tksTDXE/AH2hvqPvO4IPtAdpp+1ymIOkEvKF7JdYENBFNSBrj/UxiPi5RplA/kOiMGU+qJCpNkr7CR7A/Tra6H9iBctC0YrQ1lzZpw0X9oCZlUh/Rep1OZ2/Q+4btB6trd/xuXNmoH/xJmrZa39D7gYC3Y52daZPkC/zKBN7qpWbMefQX2iGj9Y+4HwzUC7+PqxImph/8W/Y9HNHYpSWbI84FeEpNzPWhSqwFYnsNzytmiPEH7Xa7oFVS42OxTXD+uGrrra7SwGWdmiT99F9lR8fx/aRn5MMzz5S82WzuYzKHXPpLsH66Wq3WQZw++FUGziTR51rHFX1hk37IK4k0/GYZ5wqFwh7si+E5XTWWvh5lMGzUD9qN2aDV0mbvhROnkovGfzCYfjgJL0lTWbh/x7Wrsf8YviTxsLctyV9lU3n+jtgHFISAC/AeScak+Y/bYkigVZPwlvF/Be/DszbWQNCvn15yRhpih3ZZuzQ7jvy38X/hF+vpovU4u96iAAAAAElFTkSuQmCC>
-
-[image8]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAVCAYAAABCIB6VAAAB1klEQVR4Xu2UzSuEURTG3ylElHxMk/l6Z2ahDEXNQspW2ZCPQtkoSsmKnYUo/gGykbKSyG7ylSKU/AV2SsqGhZWNDb+H++p1aTCz9dTTPfecc5977nnvfR3nH7kQDodrI5FI1PYXjHg83pVIJMZtf8FAeMB13RvGW8aVYDBYYef8FQGEJuAmorOMq1TeI7+d+BdIdBIuZzKZYjuYN6isFdFsKpWqtGN5gxtQg/AZx++wYwUB0SGq3YtGo2V2LG8gWorobq7rRayTnAe44fz2Q5JcB69oQ7sd84OcpVybfwGCGd1XjXbMA7EqePrT5p+QTCabqeZRfbZjHog3wBM9dc3Ny9xmbMQ/BveZj3Cj6rHXsLccXS8ml/AaR4vzTQ+JDcMdzCI+cAR7FM4gfMi82rTzGk5rvTbxFvbBZ/gC77RIyT7hj/5KiGLi+LKxWKxbPrWR+ZFaZvIXvbXeR1yA92aDBx31u/6aqs/xpczaYex1zIDpwNGHsA86iq7Xk3rpmv4m3l9mrxK0Cfae+TkFJOqdyMSO/YL6kK4eiV6i+sdRm+STCAvnfRVOMZ+TrQrxH6gdJtYG932ybz+hfnjBojM4KJ8C2KWil5hOp0v8Pyp/TAiFQuWvhfZwDR1BqRQAAAAASUVORK5CYII=>
-
-[image9]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAVCAYAAABYHP4bAAACJUlEQVR4Xu2VO0scURTHZ1BDQgImkmV1X7M7SGA3WC0xCJZKbBTEJpBGULGOYorFQkFLIRjSBUwjYhBSCJooJD6+gJ2VoGCXLp8gv797Z7h7EZng2vmHwz2Pe1733Dvjefe4KxSLxYciV990BEEwUygU+l19U6FOSPQ5l8tlXVtTQSchiT7Btrq2poJEA3T13tXfBi0ErZpZtERKupmP5sPxdUM9scf/olqtthHsI0FrVH/EuiK9PZ9SqZSGPxOJd2MkAkkGVXkYhu2sxyTY9Ood2vPxkT8gn0NdTohkIMAUzmUdHetfEr01+ob5mMQbqVTqCfoh+D/QOiY/DpYEOC/geAmVJKtL+/3k8/lX6JYiGX4Vn+lITgRVieMBtIXYes378ZUE6pNAAc+gQ7uQRNC5QxdQTXI2m83pgnjm/aAfc+Qy9DuTyTyXjG2Y4r6xvkQ/Ce0ijzP3F/BfzNzjG/addU/dWfPxWd9gW9dludpcT/Qu6l5dw0+oSPx+IneYwnVLZ02M8chXyTpVFcZT6ERJcfwBP4fzo3ij1zgfBaaIArpt5jginblY+zpis3/Z9r8CAZ6y4asep96Ya79uPqarY3ShZHUMvwbrm2ezHweIoM3BDd+3wMyHgl6zjkqnpPA7Onav/ubWoo6N7VdDEGO48fvGlyFQUPYsWh3MIC+IVwc6ch2fsfVBu1aIOjQ4gvW6ehtF52dYqVQe2Mds24R0Ov34H/HNgvBCFfohAAAAAElFTkSuQmCC>
-
-[image10]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC8AAAAYCAYAAABqWKS5AAACiElEQVR4Xu2VT4hNURzH78uoUQrxkvfvvvssNCvpRc3EYspoUqPIgig7mlJITE2SkrIhKRtmyFIN2bCQ5M/SAhs7C6Uk2cxiykY+37nn15yOeW/uXLMwud/6dn7n9zu/P+ec37k3igoUKFCgwP+AFY1Gow13SvYNrVZrTbvdXunr/hJLl0uLCXQjjuPxZrP5mvGa2ZIk2cL8G/pDvk9eLHkugg3hdEG7ZnyD84PInQjzI3CawFsDt4h1vXBtqO+GvLk6ggCjcsCxH874O2c+Ad+SdF3gM6xTg9fr9fo+39YNeXIZKpXKBtYfC/WzwHAJ5y8w0VxBXLB7TEu2Dt02+LBcLq9W7yJPou4xexZkzeUD+wAHtSfURyoE40s4FblCkPvgDxKdsHXqWV21nRjJdiM/k7+tWQhZc4XAvp98rVAvwyb4GeOYp1MPzrDb7Yx7sR11J/3RgigZ8yeMvean4qrV6vqo8wlmymU295Avw/fwCms2m80WbMTwCY5r7h7UcyWp1WpVd819rthpgr8Skb8roMVR0cw/wJ+wfy7DHLLmwlRCPkOe8xRcYTzu4k/Frt0MJRRn47QPJ+EjHEcZv8IXcVqggt138uwDQn6n1rEgriWewl/wnOkDZMpF3CH4mA2tQjcAB+WsGtCPBDHT5DoZ+1GoHfwWcMUfcPJws0O/a0OsOxnqfSyUC/+b1lqx6/dG+rD1Xua91a5wAUeUEPku17krXCPoqnMl8KDC47S1epBPabNs8DC6W4v6Cxs4qR043ybYVXgwmudRJul3fELXHdoWA/cWlOsi4x0VTfGncxVu0PWKod6gm+H6a6E+L3S77kf4x0H987B+D/XLAhQ/2O2mly1+A8BZyRq6TkC1AAAAAElFTkSuQmCC>
-
-[image11]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAYCAYAAADkgu3FAAAB9UlEQVR4Xu2VPUgcURSFZzEpAmIKsxH3b3Z2N1jEbitJYWORFFrYaGGtFjYSxCIpEoJYBFRw0bAW1hZWBhIIWFhZCDaiglooapGA6dKa7yTPsHMzu+tfYeGBw5u9586797yfWc+7x11CMplMJRKJJ6FgEAQtvu/vwPOrMJPJfE2lUo9Ckzlks9lR9C4b93hxxL18xLgAy9VIziLjCZO9tPM4xNDfwn14AN8Qe/BHwWaawB48pctC+L0wKFSkyFKUm2Kx+BB9Es4z1wSc4/lFKInAOMI5k7wLCWHEyJsmr9cKKkL8IxxTntX/gYQAHjsGVhfS6XQ72nI8Hm+0Gg32oZVV0Gr/QW5quNLaz6L1W0HLjbaB2+dWi0SFqz3tW6Xm3HzO5XKPK+OCa7Dk1VoyA3X9Qa60ZyY+FeVG9wVtM/I414JbhlO4ozummJaE3ytcxGabr1OIts2Ys1o96GTNyBUc0W+cvCc2YBMF4t3kHcJWq9WFc/BDrnQPGL/k8/mnNk9AewV/wQ6rXQbak5Jz9R1HwzbhAr47QOSs6dnqdeFO2U+4Vc2Ng5p67ZoSdyk6VCgUmmxiNWivBinYY4UocHDayP/k/11GFazX4I3RoAYpdKYTacXbQMx9kBsYn1Fo9eJ63CrcR1V/N+vwG/vUaXPucS38BlkFjeAHOhqLAAAAAElFTkSuQmCC>
-
-[image12]: <data:image/png;base64,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>
-
-[image13]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAXCAYAAAARIY8tAAABm0lEQVR4Xu2TvUoDQRSFsxhBQbDQKG52s9lEC3+asCBIfAArCysLO1EsUthZqlgKKtFKBTtB0EpFH0RIEdIETaGFjxC/Gybr7IBCNjZCDhx25pw7d+6dmU0k/gMymcyM53lloYxNvyuQtJDNZrcZ9pG8COtw0YyLDZLtsEnN9/1xpknGt/AyDBADoQKbnZDEz47jDNq2PUqOeVJZdDKA9wjL4QYChJJaVOd7Ac9/IjFXfN9IthRJkmh1E+DVYCFiUIWLWIUNqpqMmAYkCclvpHpdz+Vyw6y/hgu6HkKdZZPFe6anwSLumLgVXVTJD+E00ySbT+l+C5g+fFX0TV/guu4c3l0qlRpqa0EQ9LPprlQOJ+Q+mG/o60JI9b90YeGd4q3qItq6rDEY6TCE991FVe5F91T1D3Icut4ppMoDqULuxNCPzOpjQV4RyRqwon4eeQCzzO/T6fSIGR8H8lJO1FmWZE7l+2hrZmBsqIo/pAvGRb5P+Xx+zIzrBnLmZ6qLdzrYMgO6hno1n/Dlr6tvQ+5ik42WTaOHHiL4AkUleCriBGbsAAAAAElFTkSuQmCC>
-
-[image14]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEIAAAAVCAYAAADy3zinAAACTElEQVR4Xu2XPWgUURSFN0TBgKCiq7h/b3ZXkIigspUSEMHCIDbaCIKNhWAlWgjaCJImEEHtbCzEzsYihTaxV0SLdDaxiJWNnVrod+KLXC7PzLhL3NmQA4eZOffd3XfvvDkzr1LZxCaGgk6ns6PX6231+oZDlmU76/X6bk7HfCyEcBbO+UZUq9Xt3W53L6fjVh9JUOAp+BX+hPM0ZJuLH4MLseAVtFqtQ2gfY85irVbbY3NGFhTWoaDP8LbVG43GBLEXNOei1QX0XYx/A59VEqtoJEFRpynou45WpwFn0D+02+19VhfQJ+EXxlz1sTyQc53caa8PHUxqRitCK8PIY1w/QX9otD9AvwR/MGbKx/JAzi14zutDhTyBguZF6w967tEW4Xk7fhVqkOL9+EMpG2H8YcbpPfhJR6vH2Ko/POdyi4/noayNSPqDJpp4XFYQBvAHYd0aofe7DI3J7c+jf+9rJaQKjo1YUo7VhVDQH9aY1z1yL3vdz+2fwZ05yg89LkLGPoBZzEv6g5DTiEL+wJgT/v8j3/J/r7xu5/ZfoVUQEv4QY8lGDOoPwro9Gv3C+gM34iTnV0xsiutllvYRmxOMPxA7yPkdGy+C0jWCIm5oRfAFeYDjLDxuYip4WU1yOdPwW2zUtSzx1ZmHMjZCxS4xqZfBbaq0oUJ7rTtvc2Ro6O/gAnyqXamNF0HpGiHIJP/m1sTuhoQXqGHK8bvRoihlI9ZCfGTeN5vNwz42CMLvt8mk10sNJnwT3q9slB1mv9DypxGP4AUfKxN+AbtHs80UFYMeAAAAAElFTkSuQmCC>
-
-[image15]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAAZCAYAAADqrKTxAAABR0lEQVR4XtWSO0rEUBiFJ8wICgPaBJW8g42FVVAQLB1cgI3lNC5AQYvBwsJWEMTeRkQRbMVKdAN2VoKCK3AFfmfIDfFnIoPdHDjc+z/O/8hNqzXZSNN0WrT+P5EkyX4cxxvW3wh1QHQRhmFgY42gQ47onGvHxhqBaJNue9bv0CahKGdvOyddjtw+jLgEV4aBoiimCJyRMKDqM+ep/PV9siyb5/4u6q4ReqqY5/ks5wvJN2Xn+j4e9iH2B1yUaJfLssbj/Ea0o052n7LIte/73f+JHEg4xvkFM9ka2X0EIYqiVXwnlUBqHE/wDrMz4lE9CeB6JdJy8BMOZAdBEOqLqkAZ367bQ5SV7zkf1bW2j8e5RexKX7cSOBBcgLckvMFXFUD8wP2AMWds/i+QPEfypV5fD2/jI2EedTzY9xkLCPr8X2vWP0H4AR5lT1lURwGIAAAAAElFTkSuQmCC>
-
-[image16]: <data:image/png;base64,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>
-
-[image17]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAAZCAYAAAASTF8GAAAAkklEQVR4XmNgoA0QFRXlUVZWFgMymcECcnJyWvLy8neA+D8QX5WSkhKBqwZKCgIFTwPxUiCXES4BFNAE4rcKCgrpcEGoRDQQ/wbqtEGXmITP/DVALguyatLNxylBpsWKiorqQHY1TMITiH+CzAfSWUAFEWAJUGgCBc4B8X4gXqykpMQPN87Y2JgVpABEwwUHJQAAadEtdy6ZnLMAAAAASUVORK5CYII=>
-
-[image18]: <data:image/png;base64,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>
-
-[image19]: <data:image/png;base64,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>
-
-[image20]: <data:image/png;base64,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>
-
-[image21]: <data:image/png;base64,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>
-
-[image22]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACEAAAAUCAYAAAADU1RxAAAB0UlEQVR4Xu2VMUvDUBSFW1BQFEWlFNumTUtQHAQhTs7iKAUdRDfBRcStLg4K4qCji+jWoYM/wEmRjtJuDi4OohT8AzpW/W6alPQ1SSXFLnrgkJdz77v3vJeXJBL5yzAMYySTyRTgkRrrCVKp1CDN97mOcxtV4z1BLpeb0nX9wjTNfjVmQW9gTdUdZLPZaVZxCi/huqxKzekETIwy954+lXQ6bVoiwgzchnewTrCozLNAbAU+Ep+LxWLD8jzhjRRVcztBemLgletnU6BwnusCrHmZSCQSGrEnuOFoFBnjvgp3bKkPbTfT2KU2EjsQ82Ka8bk8FvRNp54FhEn44mVCmsOP5vY1EEUrwbIUd+mBsGs5xlvRwcSZhwk5Q0X0N/ScWw+CnDnmFFTdQpAJu5mfiTY9CPI4mHfFnK22eX4m7ENY9moWxoSNaDKZnJCeLaqfiXg8PoR+69WsCxPe8DMh8Gvmp4dGkAn0Y69mtokaW5ty66ERZELTtGVidUwsOhp5A2jXQhm780PDMQFLEeXHIoeIRhV46Gh8sg3ZBT3gM/9jyOqkmKwUftl8p/gDjWadPHZjHv2Z/D24yrhKzonvj+i3IG8KZpZonpdPuRr/Rzf4BkvVkG0XUKwyAAAAAElFTkSuQmCC>
-
-[image23]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAUCAYAAACXtf2DAAABuUlEQVR4Xt2UPUjDUBSFW0SoKIhILf1Jk6aCdBCFOBVHcZSCDqK7gwgOgoKTqB10dHSyQ90EFydFOtvNwcVBhIKji45Fv9u+Vx4hiUInPXDozbk357y8vCYW+0twHCeRz+c3bNsuFwoFfuw1/0xfSCaTI5g24Bd8hzv+mb6gAo7l19/rweli1a9r8OhTmJzCc9mCXC43pHsqoMo2zeNRoU53GhQluAnvYZtmredogN4yfKI/q8yO4K3ruqPSV9olLGez2XGCrvWNJZVYhq2ggEwmY9F7hutaw2CM6ybcMmc10Pf9Qhq+BgWIMfzE1DPkOFodNmT1bN8M9ZX4SJPZPWP2x4CzgAB5ZzX0N3QXLsALvWVyjzkbGaCMwgI6urxw6kM5JFxvU9+Zs6EBxvmODFDSQLFYnBBKbc6GBqRSqWFZzS8DwhEWIAgzCtMDERWAXg0yUgEtzn3O1AMRFWBZ1hK9tpwUrTGXQLsRSm3OB0IHwDqXcbMn/0xMHuCB1jg1k7J6J+LT0oGsSgZlhXb3Syj84MZHTKb1HE8xh/7C/C5coW4yc+J53qDp1xfkRBG0iHFFPh/+/v/DN2g0jhTX/i3/AAAAAElFTkSuQmCC>
-
-[image24]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADMAAAAUCAYAAAAgCAWkAAAAyklEQVR4XmNgGAWjYBSMghEJxMXFuY2NjVnRxYcUUFRUVJeXl18NxMtUVFRE0eWHAmBUUFAwB3pgPxBPkZKSkkVXMBQAM9DxTkB8GIi7paWlhdEVDAXADIwJf6AHTgBxDTA58aErGPQAlKGBnogAeuCcnJxcPiiTo6sZMgDoCUcgfgD0UIaMjAwnuvyQA2ixUzYkkxgWAMs3p4dy5kcHKMUyEEuiKxiKgBFYYeoBPbMdiOcCsSK6giEJQB4B4i5gIaGCLjcKRgFuAACB6SLudAhgegAAAABJRU5ErkJggg==>
-
-[image25]: <data:image/png;base64,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>
-
-[image26]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABcAAAAWCAYAAAArdgcFAAACFElEQVR4XuWVO0hcQRSG7xIVwQRRslncx737gCxuBItFSKJtkmrFUkgjrGAr2qUSQbBKsUU2yEJIYaGIFoGYoChhy6RNE0inpY2diMTv352rwyyIXuzyw8+c15wzc2buXM+7AeVyudv3/Xo2m93M5/P9rj8yTOKPQRC8hwtw594KsNo3cA4xJmYymUkKzLpx/yESiUQf7XhNr5967fbcD3K5HC0OmhzqKuMx4ys3JjI4zCUlhyvwH/q0GxMJrHKAhD9hI5lMPmYXo5gfuHGRQNJheKL77foig633knAIvoUXaoX0eDz+0I29M2jHOMnW4C94Btelc2PG3NjIYMWf1XP1PrSp7+h/sDeLxeIjO/7W0EQlgFuoXbZPzwH2mm27E1KpVJoER/Cd4+pSQZ2HY7892PoECc4ZK7ZdVxL7IRw2cRU9xYzPsM3CXfQZfc3IDeQNe34LZuun5m5fQUXhD51DOp1OEVPV7tC/ow8G7Vv2Fy4SHlMhe34LOGvwt1Zq2+1+Kxkr9NG/6CmWjSJl9L3wEiCv2PNbDxXG/aDzMDv6bVavtycvXT7kT4gx/VRU6Gq2EB6mVmnbrX6/hFXZzNl8NR9YTInDecZ3IFn9mVclxiklZ6sj16k9z6xkGy4T81w25AXkpdBPwm9qjfG9gLteoVB44rc/Dj1UH5DrnnO/Bf1T1bZQL5VKPbKFOoV6Q1lQ7CVunH8MYyuGCgAAAABJRU5ErkJggg==>
-
-[image27]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEEAAAAVCAYAAAAZ6IOkAAABsUlEQVR4Xu2Wv0vDQBTHW1BU/AlaQptfbQh0UFCI4OIquBREQZ0cFYqDs4KLOjqVLl0cHBwcRdHVQfwL3AQRXHRw6uKinwed3qDUtklI+4EvF+5dcu++5N5dKtWjR4/fyOVyU6ZpWrq/q3Acp5TP53d0f1eBCeuu677QvtJWM5nMiB6TZNIsuowuMOCQtsYfsSL9emBSEQN2USUIgn4dbAcYOoi527H9s0hwAQOuPM8b17E2IkafYESgA5HDSTCJCfckt6Rj7UYMwIhTHvt0LFIwYJPEbizLGtKxDpBmvj3M2JJnHYwE2acYcP3fI5H3Jng/24zYcnjgnPFc8X1/TH8zdBqJPZHUoo79hWEYw7x7gGrNivluaevoCCMG9LdDRfao3AfCLFa2bc+z+MvY3EoLhcIsCX1KXdCxTiBFmPnOmdfVsciQI5GkHtEzRsylOlysmKccluFNQWKr6At9oze0j7J6XKs0inCVU8jUsVggi0bH6L1hxgd1YlqPa5F0sVgclVYH4oac48uYUMeEkg4mHilWcmGS4oUBd1TxGT0m6ci9fg09yBUabUifHpREfgCq111GpAKs7AAAAABJRU5ErkJggg==>
-
-[image28]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC8AAAAVCAYAAADWxrdnAAABq0lEQVR4Xu2WPUsDQRCGE1BU/AQNIfeZhEAKBYUTbGwFm4AoqJWlQrCwVrBRS6uQJo1FCgtLUbS1EH+BnSCCjRZWaWz0GbhqmuRyG7hAHnjZY2dv9t2927lLpQYMMINlWXO2bTu6vy/wPK+Sz+cPdH9fgPlt3/ffaT9o65lMZkKPSSJpzFbRNcZPaRs8gQ3p1wOThhg/RLUgCIZ10ARsxCibsm/8SZJ4BeO3xWJxWscMIht0wQICHegaKsss5p9IuqZjphHjLOCSyyEd6wqM75Lw3nGcMR3rAWnmO2IRe3Ktg5GQ9xDjd92WRu6b4f5cFPFq4t274rpWKpWmdM6OCRO+kmxVx9qRzWbHufcENaKK+R5oW+iMBYzo3B0h76DUc6OHqA2u6y5j+ib2V7xQKCyS6Efeex3rBVIcmK/JvL6ORUZKI8le0BsLWErFPURtYJ6q0Y0i4Sb6RX/oEx2jnB4Xl7A41Klqto7FQsyic/QVLuKbczCvx8UkXS6XJ6XVAVNIHV7HfAvzFR1MLHKI5EMlhwrjj1SFBT0mqch/xxZ6ll8FtCN9elCS+Ad6Pl1GcY77GQAAAABJRU5ErkJggg==>
-
-[image29]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADcAAAAVCAYAAADiv3Z7AAADG0lEQVR4Xu2Xy2tTQRTGE1pf+MJHDW2Se9MkWIwuhIhQUURwYRYKdmNRQZCCS7XgcyFuuqgoSF3oojQUF6WoKFRXihZ0IW5EUXGpUlr8BwQ36u9L5sp0kubVukjxg8PMPc8559w5NwmF/mMRoa2tbVUikVju8pseJLXd87x8Mplc68qaGtFoNOb7/guS2+rKmh1hkrpJ5666gqZHPB7fRtc+a3VlTQ+6doHkniy6QaKElBh02ZUJHR0dcWS5dDq9xubLTpPV5s0XCx4LZ+3QV7p3sIysB8ej0CD7dwydDeKbgjxkHeexxTFrCP8kFkllMf7Outvmp1KpTfBHFERdhaY7Ozt9Y5PkeQbqt20MwrFYbH02m13iCubCPGJVhpKDvmm1+QyXHTjs0zeP9TU0BrtVMvY56KdbEKN7nSqfZR2u9VVqJJYN5IdVBJc/Z3IBMOyGfnDgXos3AH2hQ1FLtRXeENSjB/zdqXSgcqgjlg3F7S9byGrJecVJOhNUxtwBDaBZ05Xq74H3VNUPdLwy97gSao1lgyG0EdkJl1+AHGE8DeVcmYDhKLLJoDJGX3dAd0PD6BrTbRn8PPsB6Sgg+7fw9gd+dAd1tyrdxVpiZTKZpZLRyRXqMDqPTPJHSnybg3xEeGqWwADZMPSyq6trdaj4S+Y8z7/VFWwOsD9pfHzg+b0Op8SgqaADxs8N2SUq/AqqJZb0NGzAfRJMsx5VHOg4dMVxWXCSR2nIFQjmsk/JGQHGoYvsn7O+YZ1QN7zixP0UJKNC+c6rxP4MvF/Qs7L3I1RbLHWM/QMli0krMU9HIpGVOoO6WOIbxV45QLhulsBA7aZaEcuwRd0KXgOT3GNV3ASf8M1gsWE6fEuHcWUBqsXCfotJtt2+bzwf860p+xfm+/LKVKNuKCB0Twcyg2Wk5P0v6nXrVXP59UBTEz+T5l/MLmifvqvqGkXZ6eoXwKEO6YCqvCurBiVCYQZ1cOi2grk6SlxJewvwl8ovfvvu+sVvqn7RjDGlN7t6NsIonRNp7wprQDgYBK5AUHc5yF6X3yhMQS+VK6TwBxzn9HeMeWhoAAAAAElFTkSuQmCC>
-
-[image30]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC0AAAAVCAYAAADSM2daAAABTUlEQVR4Xu2Vv0oDQRCHL2hAQSJBDpH7fxxIKovTQgh2aXwCQftgYxELIVikSSn4AIq1IPoCIqKlz5BCECSFTYq0yTd4kXWtj42wH/zYm52Z3O/m9ojjWCwWi+U/sBCGYY6acq0m0jRdzfO8qu4ZRwxh9jKKom4cxy+sF7NckiSbxEP2D9Qe42C4hbFzmSjrKwZvnWLaxIdohPktrc0smDwWU5jbRWN1qsRX6I0Hq6s9KkEQbFMzoOZEz5UOZnvc/AMlEovRwvANYUUr/4GaDpqgB35jSc+Xhuu6K9z0Gd0RLsoe1w30hZG2Vv4L3/eXeVN7WZbV9FypYG4DvTPVM2VPzvOY17/Duk/uSO0xDpNax9gAdSUuPspHeRAm6RVHp6H3maaCqdPo+0xfo3v5QFk/0RPqS43eNBfI2Zapz/5M5MPyPG/NmVfDFstfpuENQD2alsVsAAAAAElFTkSuQmCC>
-
-[image31]: <data:image/png;base64,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>
-
-[image32]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAE8AAAAWCAYAAACBtcG5AAAB/ElEQVR4Xu2YO0jDQBiAE6qDIvis0jZt+hChjkYRBUHQwcVFHRQHR0UXZ7Wbk9BJR0EcxNHBxa1Ogjo4CYKbi2M3V/1+m7ThpG0Ql5r74OceyaXw9b/L5QxDIZvNdtu2fZRMJmfS6fQs9atMJmP774lGo13071A1/f2hB2GriHm0LKtP2tTXiaL/HsRO0PdElLl/zX8t1MTj8YFUKjXqtakvIulWsk3aiBtH2BbVSHWQpgLTdgRZlwjapSwQ+568RCJhSRaSlR3quNCDmDyZdo+cYWmz1g3R90LfGU1TRCJ1QRmmMSpyTiSkLh2uvFdZBxHYS3ku01oZpxEpiHomlrw+6lMIexCJyMvKdPbWPo0PySzklESY2yWZeOy+HAx3vbvzprRGATnLMjUpx4gisW3U3qpt7rQuE4dkatI/VmN87/N6kBOrMz1NMtRxBX/IJlq9QdMAx3HaKSLI20PkvHpd0wA2yTnEHZB1G67IpsjXCqJviLegwW8U1Odo/iP805+/DfVZmr/FZKvTj+hY0JAXl/qQViKSy+UGZYMcdG2rh4xnHZsjVoIG8ibV57QEAc70IuzzOn1tjYd8y9oNzvTcb105LNCoNDvTo36KwM3aCE2Vemd6xLRkHOU7cS17PXVsqLGbn+nliZI+mvpJwzM9aduV9e/Cux5mvgCDqZxeWsw9YAAAAABJRU5ErkJggg==>
-
-[image33]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAVCAYAAAByrA+0AAAAxUlEQVR4XmNgGCZAXl7eCYjvysnJPSKEQeoZgYqnKCgorARiBRAfasgcIP4HFPKAmssMZNszKCoqigMZq5SVlcWgEgxAkwSBik8D8QMZGRlpmLioqCgPSNIFqKEQJggCQEP0gYo/AfEaIJcFJg4yCESEKikpqSGpBzknGoj/A+XKkcWlpaWFkflwAHX/b6AGG3Q5DIDL/TgBUIMxUPFXdPfjBLjcjwswAhXOH2D3g+IAqOAcEL8DuR0JfwHi6yBD0PUMdQAA1VBBG/ha+a4AAAAASUVORK5CYII=>
-
-[image34]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEEAAAAVCAYAAAAZ6IOkAAADYElEQVR4Xu2XPWhUQRDH97gIfmvQ8yD38e4up4cgGDhFlJBC/EoRwRQqptaIqIjgZwoRFUQLRUxjEoKCSRERIWphE8XCFBYiCGKnCBbpBC1ExN+8271sNu8S4ruoHPnDn7c7M7szO2929z2l/gOk0+lcJpPZ5cqrgWQyuZr522hGXN2/QJ3nedfhT9huhI2NjasI8mYsFlssfUkG+jF4X8088EgqldoId9hC5txn+xRf9IfgG/jcMp19NDQ0rMTpCFxrZLS73CpAdgtZpy0zQLeFR12A/AB8DN+R1DO2LpfLLUPeKwnXtpvhSZpRFTDXrILgmuELWC/9bDYbJ5h7pq9t6rVN8/jIcZCcw6ZqgoD+rpsEAX4uUSG7pY3+EP2stNkuiYmWIUEATRIEDvp46wtFxkLXIzur9Z3ylo29LJR+j7LKXqoEjkjVGJmNEElolW0nbeZOKe2zUrJDAWfn4RXdjdC+DY+q0pnwAHZYtu1ib/pa1iF2qkKZ/mkSkBWZdwD9fEc+yTYQ4hTjC0xyJ4jojmNWJw7oD5uyo9TyyJ4lEolk0HkgAbhBeBPPgyj9I46/V4zpd32b8VMlAT5yEui/GKsfHrK/mPQlznL6MHpIUDtFJ2WXts4DgSzWDlh02qZiiYapBDcJEi+yD7adDzmsULTxbCkWi/Nc/VRg3DZ583I3k4AeuNXoZMHylmGrp6tB/NDuNTYihyPYbuK5x8hthEjCpPNH4kX2sWzEm1uDYBQOMtF+nl1wiAUtKBtNA3HO2Lc8j+Xz+aWObi/zDfA8bZIri6bfn9H7lMQj8p7Sv4g8Z483qJQE5E2M7YNf4HvGX0W23Oi90lkj16L4afFK2+k1/OYbyAlOZ4xB55TOFIuIIXsilWEmCotCobBEle5mH5JgSYK9YEmISUoQKiVhGsje7+asWucqfEggGAzDz56+O/X93Q1PqZl/tc0IJGA7CzvhyqsJWTxruawq3DimCr7CHwT0ySttiWu0i2qWE6ARwddBAt3gKqoBOaBle0llu7oy9OHwS/azq/uLiOqtUnVMt718yA8HSfieLv1pTYD+6ivv4ZqFvs9lC5ivPB86OYN86Kyw5TULfb3Ib6X8XsrVMUpl3IjH44tc21pHVH419e9m7W+BOcxhDkH4DVmG1Z3b2MAWAAAAAElFTkSuQmCC>
-
-[image35]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFwAAAAYCAYAAAB3JpoiAAAEyklEQVR4Xu2YXYiUVRjHZ1kLtTK23Hbdjzmzs0Ora2Yy+RV2kRgaUVBECEoqCt5IpVBgJGjRhRd+kIJQghREucgWbGV20RYbJl1FFyZeiyIhInijF+nvP+856zPHmWWcZtKN9w8P5z3Pcz6e85zn/M+ZyWRSpEiRIsX/As6555C/kRuSbDb7Q09Pz7RgLxQKM3K53I/B7mW4o6PjATvOZEBXV9dMfB8z67jc29v7hG3D+t+N1nqOeMyzbRqBFgb+BLmOXEOWxg3QvYocs5sxWUGQX2YtVxRQkmlnbO/u7u7BdhLb7NjWELCrbQz+GeVbflcPom6xbdBtQ9ZY3WSFgoxsVvYif/X19XVYO/X56D/lc4rVNwyagGDvY5JZcsA70meaTJEDamd0TQcU0FssFu+L9QGiNbLx0Vg/EdSHtRz2WXxQCUbwV9s2SiwlmNU1FJpAO65v7b6cQLYEu7jPn4C2W72aD+Zbi+yvFHT86cTHr0mCRbFtIjBeXslD/6mUS5Fr8b2FbTe6ZbZfQ8Gke5mgqG9dItQvI6fy+fzD0mly6gfKe/0n0N2yRXPboNcbbIF+LyDv6FtBVrAVdAVfOk+vR2OaaRgCfyuLvUr08SXyD/pVUij73d3j77Kg/5tgCzrBrHmFqa925t6inIP9UKbZ/J0xl6QCrYAr8MoCF/G3t+sp+YXt10SUgs68Q5Qj9QY78Ddr6g46ZbIz95aL+NvH5yy6sYGBgYeCfgK0krzTY+U4NIEy2OpEJehPuYRalusExPyN/uO4XzOhC5Q5/0A+r8TptcDyt9Ur652/t3IV+Fvr1Hqtrhp0Yuh/JNYHKHMOwNsLYwOd1nonTsuJyNaG/BI71izoRSGuxY/FyHr5XE/Q9f6m//ZYT8YXGPM8cpF5Thh6FUSxx1yNlEq7w1UTsQJ/j8McNQW9bDLqc5BR24/F9IuakG+QN1C1Ur7E+EOUc2m/CTmugGXugIZCsA2NtNQbdGVy1vC3gRKv9ERUcDOGv/2v01GtOej8k3KPfGDMlaIoyqeU2eguICPU14X248CwHBmuxjlyEPslO5ngEp4bd0zBUKCZ+BGqLX5itdmIvKeskc0l7/yfVdrxqsEv7Fs28+nIdMdBLxQK7fIDX5+MbYLzT8Q4O3WKs8lpLlEqbRaoTrtO798ZtfG22xIxDLICw1V36/8CPYteLGuUSZ6Iyq4wWYAz/O35/qSOa7Dr1NBnF7YstpFgQ1ek/uttDlUBbXdUCHaANvY15PXYYNHf3/8Y/vxu1irRE7fVtvOPg+EQvACtU+v11fCCK/1GcUmAfxMb+LqSrLEPCQXf73jJMR/E05T5YNcCFWQdNWxjwSZHjfOTAWX8TTmLtf0Z7jx/Jwypnbc3/iHhd3WUgRdTvqJnE+VP4Sc2wX2e+nfKfG0K39+3t7c/KNE3Tj6L/s1as/xuwvD3My6hR0uJgfe3EYsNrPdxxUGbQbnAVWCMukCAnQLHJLuUueJQyv3oPkL3tktu6U619c7s1LcPuI7jDnQrywa9R+Hpchj5AJ+XZJKM/xB5P5c8H79CjvC9Vfcg5VGtV+uu9W6pCQw6VWJ1IYutbnBw8P5o4ol/FNyDkP/xf/+qh3V5W+Ds1hp/HKVIkSJFvbgJYdxmpFKjQz4AAAAASUVORK5CYII=>
-
-[image36]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGYAAAAYCAYAAAAI94jTAAAFB0lEQVR4Xu1ZXYhVVRQ+g2MY/Zk1DfN3170zA4NjGDGVDiS+GCgihEIO+iAoKUQPIqkvYT/mm0aZColMGgzjH1JUjIiENm/qiw8WVCKKPSSULxr4YLfvu3vt27r7zrn3HMc7TXA+WJy9195nnbXX2mutve+NogwZMqRHU0dHxzMi0sYn++GEDI1BPp+fHWv3lpaWxzH4HWgEtBWTZ1VMyFBCZ2fno7DPO4VCYX44lhR9fX1P4DHD9yFvQy6X+wI2P04/mKnOMRg4Qs9VDMCD4C8Afy/oAGh5ZIQmhS5oDeggZUGRJdEDyPmvAVsshf5/g77hmsLxesC6n4aMz/m0fA2Mj5I6pgkCtoHOg1/QVMeIOjgwMDDTzKuJ7u7up/DOKch5s6urqwfP99C/DxrjWDh/uoKOgO5fq2Puo/1aOKce8N5c0O4oSFmpHIMPD6D/O56vGl43eNe5czyvHjD/bdCXvb29TyqrCf2doCLkba+YPI1BR3AdoC3UnaknzQYl8N5aUshP5Ri0d9EJlsf8iP44c2IUFqoYqNwiF+R5iJyX0f8LdLa1tfUxO386QlPxKPRehPrSivZPoHvsh3NrAe/sxvsvhPzEjmHxF3cYqHCMCjgHuhjmyThA1uuYf8WGvkbjXcqyyuh32+KoSvEpAh2A7w/7CBGXBYqgUXSbg+lVUPsuBZ0BLQwjLbFjjAPiHFPBTwtxIc2F7TG85eKcRX4cHbJypgI0Ir47bKOjvb29C7xfQPdAg3a+BepyJ+x6DHPGsBl34Pkt6F3Qr6Blfl5ix/ApzvgP3TEs+PjWD1D0Z4S1kKc78ntGEtrPo30CY32YNwR6X/VpY0SF8hoNfHdQTLR4sD5KjajBOl7C2E3ovDpydbVcXxg9aP8GGfPYT+wYzaNX5eE7pnTSE7dj5pLR39//CNrr9YLFBS8Rd3KhUVhoV1oBccjrRS0JVRkgHs3Q57BNwx6QUwDdBN3lhrJjjBRxdWhnpLUY7Q/9PNWDh6hN7Cd2TJwD4vhJgXdWgcbxrXw4puDO2iduZ7E9gsWsCCeFYCRh7lZx96QktCGUMRHERcto3J1Fo7koLsWWo0ZcDbrN6GdfD028v5Xqsrhj8x+iB6LEjgGa0T4p8Y4Z1xtsYohzyhgWOYd9lbXWpidxu/ASFfffSuKYBoE2OMC0Ew54qL6MmrITCLVl2UZcj5j7C8aHxJ1KS/UpjWN8DqVXSymHQNF7Fv0roL2ex9zb09PzXJiDLZAaX8E7I/ZCSbn45qeROXaL22nnqI/ZBOVj9lSCaQf6HYuLFgWjunQnA+1jn0zax69D+ytF64uvsWIu6qkcA4V6xRWvIc/TIn1LzEkE7T1UjGHteRbidgtryi0s9oYn9P8E7fLzWGMg44LnmYg5Xcc4jYBPqXeszhORrqMoJmrQfhF0FetZwD6eH/D+wku2uF9PTthNmsoxhDhPX4MCGzG+Du0fQW9FZpeDv1nczxRnqwS7ccql4hNR+RacdycVHpe9071xLvuDwVRBT4a3J9C3JsFOn0T/pqvF4u57X+F5TdxR+RL6b0TB74SpHUPQKBC2ghRnIE1xn03yFj8j54qjdfqsKmX/Z8AaFsI2+2ut44EckwR4bxBG3RbyM1TWlzg0xDEqdDinl6UMlchrfQn5Fg1xjLjT1eKQnyGKmNqxYXfU+3sj1jEq4KieNI5OslZkSAE45OPM7hkyTBb/AIY3yRBvDcbZAAAAAElFTkSuQmCC>
-
-[image37]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEIAAAAYCAYAAABOQSt5AAACvUlEQVR4Xu2XO2gUURSGJ0RB8Ym6rtnX7IssgXTjA8XCwiaFRoIgYiOIKIIINmliFVIIIsFSxReEaGIpomAhxMLCZgsRhIBKwEpsNKCi8TuzM8PN2Zlkp8hulPnhZ+7858y595772LOWlSBBggTLoFgsXrVt+ydcMFgvl8u9Yqd9AH4zbL/hBR2nXcjlcusZ82m4VduiUK1WNxcKhUuM+ya8Anu0j4tSqZTGOAvfSVvbQRe2BwS7SLtbG1caTH4bEz9B//cYx1f4MXIyCswHV7vOt2eJsY72AO336Hu1r4XhIA6/4ASvXdpeq9U2EWQKv7K2tQNeIgbz+fxuxvAwRiLW4HcbPpa2L/I+RpxnsrsMX/d4nMO4IM9FBg/Y+uB0KpXaqG3tBmO832oiZOHw+8xz2NTRhuB3dMfUZdtPhBl8sBJHsY9qvROImYjD+P3RieD9iCw8PBWImUxmB8JbobQN/wB8OC7J0HonEDMR7oSjErFIZ4J7EOcR71oh94McB+yTss20LQwM9CS+n1olsd9wVqs6ThRiJmK4acINvTkRy90PkgBJxGq4HwRxEoHP5aYJW+GJ8O+HedkZprOP1XQ/COIkImzCobq37V/C2SXqh+t0fkgbolBs/Fb3tErp13GctTpOFGImwi0LohIBh1whnU5v4OUFnJFawXQW0Ok+bLfiDFQKGDo63irpY1DqBB0nCkslgmp4Czs4Y3l3HXGz+H2AN0w/uQbQvsA+UzwvIgH6DV//En0iEzP1TsNLxFw2m82ZOu/b0evwB9zvybKjR+FrSZIIsqjEmEKbtIwiyzUgXrMbpesIPMNKPec5zQe7AscOolKp7GQ8M3bzf545WUjx8Y7500KjfA4WTxIgOn6PeA7AO/CVTmQAaog8zsfk/ETcF/8yupmX4x1HKRrb/n8pQYIECRL8L/gLFdvl7HLuB/UAAAAASUVORK5CYII=>
-
-[image38]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC0AAAAYCAYAAABurXSEAAACGklEQVR4Xu2WvUtbURjGb2gEi4KKpNF8nXxIS8FBiG66lS5FERTa2n8hXesqFId27CKIUBzExVUQ7NCtUF1cuoiUSkAyuGkGQdvf23tOcnJI8zHc2OE+8OSe9z3PvefJm/fkXM8LEaIrRPL5/ON0Ov08Ho8PuJP/HVKp1MNMJrOhlNri+pbrt2QymXJ1vUAul3vC+h/hJlwRb67GKxaLfSLA7GcZZ7PZfuJ94lVXGzRYdwn+wMNULBYbZPweHtIBQw1CBC+ZqNAWkzoVId4RytjWBolEIpFmzVP4xuQo3AjxESzVhLTAKKa/k9wljEpOf8OvQhnXxAFDzMJrjBattClg3QuGX5G4k6tREY/DX72uNOt9amJaPG6TvyCflzgqFbYTAtpkhlxVHlK/NXhoc/8y7efZpXGCM3hD4tyQ+Ar+VlZvuWBHTzB/bN/Xjiz+2n2OgdWSrU3LhwRORaX6e/ASPrXygULOBdb70onpebeijHOwrKyN2St01B7adFV62BLIxpTcnH1jEzwoFAqPlL9pO2K7fyI06y1Ml/8edkzOElSMSJ+KB3DDa1Nl/XO+QLvcKVWbdqNQC2hu0T4zuaw+6IQyNhtRNtOs5/8fllSz06dHMGcGXDM5veHL0gE1ofKPzRPlbz75NmO1yXsA1Z7Gx08K+U7/Okd4+iCvFw1C6TUmhhuS9whpPXnTxNOiHO3ufIgQIUJ0jz9UI6/zwfTvvAAAAABJRU5ErkJggg==>
-
-[image39]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC8AAAAYCAYAAABqWKS5AAACCklEQVR4Xu2WzytEURTH3zSjiKI0hvl1Z95IKWUx2Y2dSLKiEH/CWNvaY8OCpGYlGzspZSMbkgUrK4WUZjE7LCzwOea+vLmjZhaMt3jf+nbvOe/c+75zzrnvjmX58PErCNi23ZdIJEYjkUir+dCziMfjLclkclMptcO4yHgWi8XiZpznkM1mmxC7jeiCzFOpVDP2IfaSGes5IHYGsUXaZUC7Ati7Qpm7Yz0FWqMT8RcI3cMMiS8cDrdhnwhlbizxDhA+i8h3GR0fdg+8/6/Mo6VDa6hiOp2OSGtLXEgyDp/ob9tZTPsM4XuF699b/j302VuFHzU4bsmvYHIL3xD/4BD7WQfNmy9wwNepl+eX7nW1SEbnzH1cCPB8mT030KV0R6yocsY3sMdknslkuogNWmyYxfGiKjMs1diHJdjv8v8potFoAj0Llm5T3r2KPSL3DWOh6rONc9LMMPM0fFSuA9xo6I44Rp8tosn6qWS9IkiLf5Ued3y6XOIbdsf+gKCUUDatl/V+ubSGA8Zm3R1XP4nP4SxKgNj6lj2Cm1aNrEs5WTtB7HS9VHW0oUvD1wUp2lh3RzUGKwJ1eeTQ5azyxZSHx/y/aa8IbCCk4mgoaU3uc5k3Y6XHp+C1Kh/SQ0rVbcY0EojdQse5k0Cd4Bu4ZsZ+QXpRLgbT/x+QPjfPhvwQ52Ly4cOHj8biE0iznh4nNpGyAAAAAElFTkSuQmCC>
-
-[image40]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFIAAAAYCAYAAABp76qRAAAEBUlEQVR4Xu1YXUhUQRS+iwZFRfRji7ru7K6BSEHB0o9QRJBRhD1kD4FFD4FFT1FpZAS++BhERkFJPvlQ+dCLERRUGEH1bPUiUUSSEEFgUGHbd7xz7ey5M+u9OlHgfnDYe78z59yZ786cmbueV0YZ/z2qqqqWZDKZhZKfr5iVHgjYkE6n+3O53DLpm6/IZrMKGKRf6TOitrY2hYBHEHKtcCUg8Gb4LsOuwvaCqxBtosBVnhDQ5wPo/0rJm4Dn7oCNwQrMxmE/YJPI9Ry/rR7rW11d3Tbwd6NMsAQaXsJAuw18J+wJkmeps/gdgF3P5/MLRNtScJXHCOTpRe685EsBMX2wn4jbyugK3LdrQTtxn9B8AtwVcGdZ2zCg+Do0fEO/nKfOgf/EH4brHLh3EH03b1sKrvLYEFfIhoaGpYgZho1iySa5D1w19Uv6cN8Eew3L8vZFIKXRYEgWVXA9Oml1wAWdQEy/9+eNlYSrPDaomEKifSPsM2wQt5Xch8m0Efw32EhNTc2qgEf+5eBewtp4+2mQeHAOwbosfJEAtIvh/jElpeQ8xgRXeUpBxRQSYu1DTAF9OyZ9VN7IBzstfcovBwOe6cXT4GiQ6EgL59lAbQIU8TbY2tv42UDFFFL5G15RfaRaDe6o8mdqh6l265U7TKtJ+oz1i0CD04OckwCu8hAwW46jn++lIf47bNzAP5C7OXsu7dLP9DXVvgJirsn2HDTZrP0lIfWDi94oFVoEjMrAuAK4ylMKKsaMVOb6SEezc8rfrZtZ8yJoIcfwm5M+q5C2gdp4G2ztbfxsoGIIGdRH2CnOUzy4CVgf5zm0kF8xOdZLn1VIoBJBg3KgTABzrQjDVR4rVAwhlaE+ar5N+QL3cJ5DC2l+8TRN4fgI22PwUXGlZdAYcHQkwP0IdSjgqDDX19evNhVogqs8NqiIQs5wfiSBqU5aD93KFzsUO4VgQKajQCqVWgPfB/gOBhx9Lin/k6op4HB9kTpBR4eA43CVxwYVUUj94fFFhc+PlXjmbXp2ICSuz+N6J2tDXJcynLcD0Odbv2IzgwP8fthbtGlHgiO4fgU74bGzFPiT4H7BHtKSZeHTcJEH/AVdhuTubNy1YffxElfol0ZLssBsnOoly90KmyRBEXcY1zcQu4g9fqpEBUIbQTMF9iJtORjTkQC+FjLb8UDP7N5kMrlY+gK4yvO3QEtW969ZiEhCZ5V/TJpeQSHoPxGeZubw3UsPSPsf+nOCqzyugT4dgj63Zqzf+lhwR76JKNA78M10+C+4WHCVxzX0RLuHGbtJ+kxIoHEHGV1LZykgphFva7vk48JVHsegw3q38r+9o+mivzfPIHCL9M1XYKXuwgpp96KKWEYZ/xy/AWhBle94dSXZAAAAAElFTkSuQmCC>
-
-[image41]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAXCAYAAAAC9s/ZAAABIklEQVR4XmNgGAUMUlJSIvLy8oeB+D8S/iUnJ+cCU6OlpcUGFFuOrAYoX4ZsDgNQwBckoaCgsBBFAgGYgfLLgLjK2NiYFV0SZIAxUPIrEK8BclnQ5YEGmwPlFsvIyHCiy4EB0AAloILnQHxAVFSUB1kOpAkovwAoZ4gsjgIUFRXFgQruAvFDIJZElgNqjgG6oBHIZEQWRwEgW0G2A/FbINaEiQM1KgD565WVlcWQ1WMDLCD/A/E3WVlZU6gYI1B/J5Dvh6wQJwBqniMPiSJfEB+o0RbIn4I11LEBoOIgkAFA3ArERUDb09HV4AWgxAPU+A+IrwPxYvTYIAiQ0sJXULyjyxMEQI2S8pBobGbAF2W4ACiwgK6wFhcX50aXGwWDGQAA8u5CHC/Au80AAAAASUVORK5CYII=>
-
-[image42]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAXCAYAAAD+4+QTAAABxklEQVR4Xu2UQShEQRzGd0NRImkT7+17u6+N9ra1UUpOLnsgLSfrKkflopSTXBxdlKScRK425cDBQTntAeUkF6e9cUDh9999s43RsDkp+9XXm/833/y/2X0zLxJp4M/Cdd023/dn4BZcTyaTA6bHhlQq1eF53kK4dgX2mp5IEASdTJzA1Vgs1p5IJDKMr+GU6TXBZrD5JULmWNfKOMf4Fn3okxFxiclLnl1Koy7AG8w9utdAM55teChjJVKv0etY/p2KII0lgF3sKpMgHo8Poj/ynNB1HawN8DzIJnUdLQ+f0LNKSMOyGSIGMcqudF0HnjHm38wQ6nH0d1hQQqWZLcTUdahmtpCargSzWZ0h8i5/DqHI/TaE+cW6QmzNbLqOL81suheeELOZCoHLuq4Dzwjzr7YQmK8IcvkozuCRXCbNKCfnRZ5Kk0vLke5jGJWae+DguYMbyiOgzzxaGaZrIo1m4T1iMpSijFfhhTQWwXGcbuoSfIbDNl82m20h5ABtL6Jd0MoEIZtMnGKYDBdeMc4oT/iLi171k+ErPfwkFfHu+9VDtAPP2ZSrPDqiLOinyTRNRiXYNHyDJnmHslaeUpuGBv4hPgC205VJ2cpVwAAAAABJRU5ErkJggg==>
-
-[image43]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAXCAYAAAD+4+QTAAABcElEQVR4Xu2Uv0vDQBzFU1RQEB0kQ82PMyFLB6eAoDi6dBCkOAjOIrgILp2cxH/AUURwEFGcxcnJwbWOTgoFJzcdRKp+LumV82jUhgyCffDh7l7efV8KbS2rrz+vqVQrpv+doiga831/UwixD9tQNjMWZgU24ApalByZmSwFQcAV0aBkjXvD7Kvs7/BnvgRlCYEl1jlo9lAySP4AzuVemZx3Kbp0XXdEy3YeluHhtyUMCsk/stZ1H68GL/ix7quHvZYskH83Szgv4n/Aqu4nylGSDMsqMf1EOUrq3YYVWkJ2q9uwQkuyhmX5iXKUzJN/M4epEqjpfqKfSsIwHPc8b5JtSZ75HTjk72FPz3F/He8JKrqfSJXAsdUepOQ4zgR+A15htm2X2O/AjXwBacRxPETJGd6Jpf1A1fe9CS2RfkzJM+Fb3nZaZmzbHsW78NO/DKHuyuHSJ3vKWoVDuOal3E5BQRqgPIZlucqzGejrH+oThI54+eH2420AAAAASUVORK5CYII=>
-
-[image44]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAAYCAYAAAAcYhYyAAABlElEQVR4Xu2TsS9DURSH+9ISQoJQL9577e1rJ43txSAxkFgMJKwWE5EYkIiIWcTAYCZEIpb+A6KDnYGExWSwiUVCgqG+8/Tq9RC1STjJl3vOr+ece+5pG4v9LUsmk425XK4dNx797FtTSvXDI5SgaNt2QzSnKnNd16PBNSwbsiVxOp3eyWQydYb+uZHYK9OkUqlhrTmO04Z2ARtm7pdGkwWSb6FTazTsJn6AMTPXtLgUUDzk+76NX4AjWS6jN+N3wDzcEfd9WLgUwykNVmBCfHiSsfP5fC3nHPo2540gPo1W2Vtr2IBbFeIl4iKhJRr+OMmlaveRQNxXr9+Cr8Uf7UOSyskFwkRZlsZv+9C5TDcZbRyaLBGxJAla8zzPRbtS78eW38ceHFPTYuiVJjBoaPL7eIZR6OGCWWMfm5IjC8VfDyflnV0yol5gNpttIi7CPc0CziXOAVV5tuzDovGMXKIvljGn4Qy24BBG4JziA861IAhqeGI9/i6cQIEmU1Krm4QW/bdKoTxBx2Wz5Bnmsv/tt9sL49VwGQRrSTYAAAAASUVORK5CYII=>
-
-[image45]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAYCAYAAAAs7gcTAAAA1UlEQVR4XmNgGAV0AwoKCgIyMjKqQDoASEsjy4mLi3PLyclZGxsbs4IUcgBxpby8/EMg/g2UsEFWDJRrAIrfVVRUFIcLAgUmAfEDZJOVlJT4gWIngHg5kMsCFhQVFeUBChwA4jVwQQawAUFA/ElWVtYWJgYS1ATit0AnlMPEpKWlZYBi14FiE4BcRrhioE4/oMRPmHuBTuEE8ucA8XaQU+AKQQDZvSDfA9mLQRjERlGI5N71QOwJNP0kMAQigVLMKApBACipBFT0BIivABUlYJg2CqgBAF54LaBwVVRFAAAAAElFTkSuQmCC>
-
-[image46]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACYAAAAXCAYAAABnGz2mAAACBklEQVR4Xu2VzStEURjGZ4oi8hFjMl/3zkfJQqkh5aMssJSwEP+AJGXDkpIFdpYWZKFsLGVBsjayUCxYSE35B1iK39ucO64z994JE5t56umc87zvOee57z3nXp+vjK9IpVJ1sVhs2TCMLdo+Pf4vSCQS9Rg6Mk2zJ51OV9LfjUajA3renwMj4/A2FAo1y1gqB/fo+rXUT5g5TOm6hXg83saim3AHTkcikWo9pxjUK7wIBAK1TuM8ENvhHDyHbxjb/5KgQGwC3hHvlEXor8FTeTV6rheYP4iZe+a2yph23V7BPMQYyWO0vTDrZIxJUWIPcMbSWLyRcQbOK6kCbcHIVbOAxFbkgdS52mafWbR++leGU8UsEGyFT07GxBB8ZaG0TfajHXgu6g5/OBxuYq+GomesiLFtB2PyWvbRn9ETdt0LnFOmGNfcxG6pHnMP4bCel4eXMWXAzViB7oVkMtnCnBPmTNJuscaiz61aAjdj6qBfOBn4iTEB86pkP3mVeqwAbsaCwWAN+pmTgZ8a+xbcjAncDLjpJYWXMSP3rSkwoIxluWERu15SeBnjBo0Se8PYkKWpc3IslL49v6SwjMEDn3ZL1DfnEq5aGr+jlFTL9PiF/QpSBdlAKgLfFV/Y8IbNO6w8qtaF/kj+krrqGXI25FtkX+9fIDcUgyMYGpPflB4vo4wyfokPf3ag2+REH3QAAAAASUVORK5CYII=>
-
-[image47]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC8AAAAYCAYAAABqWKS5AAADEElEQVR4Xu1WPYhTQRBOMIriPxqC+duXEAgGUTGFREQQrvAKRVIJ2h+IzQlB4QRBEdFCkPNAURQRVOTaOywEheu0thQ8EQsFC9HG/+8zu3lz477nu0QLj/tgeLvzt7szs/M2lVrEAkOz2VzaaDSWaf5/gSAIRkD7NP+fwRgzDPqRkI5re4dqtbq2XC7fqlQqOcnP5XIrYffI48tHL7R9IiBit2H8BRvYrURp8HeAZkFtJesBshZsz2u+A2RN6HwCTWKakTIekLaQzdTr9dVS9kfAcD0Mn4FeFovFgpYTkN2A3pDmO+DwFzwH7wH2hxld6JzQMsIe7i78LNeyWCBV22D4QUUlA0fbeQk5wfgy9UKrEEw1S4alo2UOPLxRmWWgYGs4tpu/FFokhC8qdMwFmVKr08YB1oVWIXhJIR/TfIeozGLeAQ1zDB8BxntDq4SwUfkK+4P4bmI0ML6G8Tmt60EGehOlUmmLFjiIzE7n8/kS1+CmscZTHKyq9RNDROUb6DXmr/B9y3lcjTtAr8LDI6IrtMzB2MyC3tO/XeMzaGreNS5ha21OF+CNh9MHIipLoroANwbdEc0XSPM+GFXvmLeNyCzL096vNDK1B7KzoE6tVlvjdH6DiEqvh/MCYj7uooLvIcyPhlZdUA7+9bjUi8zO6eGYH3OZlf8IlN8BjK/yIPC/E3p3orLqjYpENptdRQegipaxzsGfSKm+LeHLrIbpZoEXnvdnEjb7ybdrT3v3FhUVCegcgXwcw7SWgd9hpDRfwngyK1EoFDZwgwwELvNGjJ+rzT+hD20XGxXWINJ2ErJ3oJaUEVHPAYW4zLK2t7LjQH4v1Y06u9Cs3nxZ/tgwGQLzjQnfFL1OQzLdTvBLhvlDX81B1gJdTHkyYn/39yH/KNaQnYbdzPG/B/YxZ5Js/m8ATk95ojkQ2NHgd0Zv3sS8qeYNW5s3454DfYKPwCvG1rhd5zFos1bsG0yziXkODALcA7g2U6BdyMBprDWa8pRmv2B0zsQ9BwYFezwbQRDxluobtguN+i7xIhYyfgKfEgClWokhzAAAAABJRU5ErkJggg==>
+- **Phase 1: 环境构建与基础 GPGPU 设施 (Weeks 1-2)**
+  - 使用 `uv` 初始化 Python 3.12 虚拟环境并配置 `pyproject.toml`。
+  - 构建底层 FBO 包装类。跑通基础 Ping-Pong 渲染并完成 UT-01 到 UT-02。
+- **Phase 2: 谱计算核心与 GPU 张量化 (Weeks 3-4) (最难点)**
+  - 集成 `shtns`。编写 Kivy Shader，实现正逆映射及指数滤波 (`spec_filter`)。
+  - 完成求导管线的 GPU 移植，强制通过 UT-03 到 UT-06 测试。
+- **Phase 3: Navier-Stokes 组装与策略模式积分器 (Weeks 5-6)**
+  - 实现非线性对流项逻辑。通过终极闭环测试 UT-08。
+  - 实现 RK3/RK4 架构切换，通过 UT-09 测试。
+- **Phase 4: 3D 渲染器、动态响应与交互交付 (Week 7-8)**
+  - 同构渲染与线框: 构建基于高斯经纬度导出的同构 Kivy 3D Mesh，实现极点缝合与网格边界的黑色线框高亮。
+  - 监控告警: 接入实时 CFL 数计算。
+  - 动态重采样: 完成 4.4 节定义的“暂停->显存清理->CPU补零/截断重采样->管线重建”的运行时分辨率热切换功能。
