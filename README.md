@@ -7,7 +7,8 @@
 - [x] Phase 3: Physical Module Integration & Pluggable Integrator.
       Implemented specific physical Shader logic (e.g. nonlinear convective term `convection.glsl`) and pure Python RHS `NavierStokesRHS` for baseline comparison.
       Implemented pluggable RK3/RK4 time-stepping state machine decoupled from pure physics.
-- [ ] Phase 4: Rendering & Dynamic Res Switching.
+- [x] Phase 4: Rendering & Dynamic Res Switching.
+      Implemented 3D Isomorphic Mesh rendering with accurate Gaussian grid texel mapping using Kivy Mesh & RenderContext. Integrated dynamic resolution switching logic involving VRAM Teardown, NumPy-assisted spectral zero-padding, and FBO rebuilding. Implemented real-time interactive UI with CFL calculation.
 
 ## How to Test
 Execute tests using the `uv` environment with `pytest`:
