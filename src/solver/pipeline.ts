@@ -1,4 +1,4 @@
-import { SimulationConfig } from "./config";
+import type { SimulationConfig } from "./config";
 import { SimulationBuffers } from "./buffers";
 
 export class SimulationPipeline {
