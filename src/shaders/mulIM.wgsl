@@ -2,6 +2,8 @@
 @group(0) @binding(1) var<storage, read_write> a_out: array<vec2<f32>>;
 
 struct Params {
+    nlat: u32,
+    nlon: u32,
     M: u32,
     L: u32
 }

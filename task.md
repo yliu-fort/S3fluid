@@ -268,7 +268,7 @@ src/
 * [x] `invertLaplacian(applyLaplacian(a)) ≈ a`，忽略 `l=0`
 * [x] `filterSpectrum` 不改 `l=0`
 * [x] 高频模被压低
-* [ ] GPU/CPU 一致
+* [x] GPU/CPU 一致
 
 ---
 
