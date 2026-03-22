@@ -102,7 +102,7 @@ describe("SimulationPipeline Legendre passes", () => {
 
     test("Initializes pipelines", async () => {
         const dummyCode = "@compute @workgroup_size(16, 16) fn main() {}";
-        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
+        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
 
         expect(pipeline.legendreAnalysisPipeline).toBeDefined();
         expect(pipeline.legendreSynthesisPipeline).toBeDefined();
@@ -111,7 +111,7 @@ describe("SimulationPipeline Legendre passes", () => {
 
     test("Dispatches Legendre Analysis pass", async () => {
         const dummyCode = "@compute @workgroup_size(16, 16) fn main() {}";
-        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
+        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
 
         const mockPass = {
             setPipeline: jest.fn(),
@@ -132,7 +132,7 @@ describe("SimulationPipeline Legendre passes", () => {
 
     test("Dispatches Legendre Synthesis pass", async () => {
         const dummyCode = "@compute @workgroup_size(16, 16) fn main() {}";
-        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
+        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
 
         const mockPass = {
             setPipeline: jest.fn(),
@@ -153,7 +153,7 @@ describe("SimulationPipeline Legendre passes", () => {
 
     test("Dispatches Legendre Synthesis DTheta pass", async () => {
         const dummyCode = "@compute @workgroup_size(16, 16) fn main() {}";
-        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
+        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
 
         const mockPass = {
             setPipeline: jest.fn(),

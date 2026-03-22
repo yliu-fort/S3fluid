@@ -246,20 +246,20 @@ src/
 
 ### `shaders/mulIM.wgsl`
 
-* [ ] 实现 `i * m * a(m,l)`
+* [x] 实现 `i * m * a(m,l)`
 
 ### `shaders/applyLaplacian.wgsl`
 
-* [ ] 实现 `lapEigs * a`
+* [x] 实现 `lapEigs * a`
 
 ### `shaders/invertLaplacian.wgsl`
 
-* [ ] 实现 `a / (-l(l+1))`
-* [ ] `l=0` 强制为零
+* [x] 实现 `a / (-l(l+1))`
+* [x] `l=0` 强制为零
 
 ### `shaders/filterSpectrum.wgsl`
 
-* [ ] 实现按 `l` 乘 `specFilter`
+* [x] 实现按 `l` 乘 `specFilter`
 
 ### 谱算子测试
 
@@ -269,6 +269,8 @@ src/
 * [ ] `filterSpectrum` 不改 `l=0`
 * [ ] 高频模被压低
 * [ ] GPU/CPU 一致
+
+> Note: Node.js/Jest tests for WebGPU are restricted to mocking `GPUDevice` to test pipeline/buffer initialization logic. Mathematical validations require a browser environment (e.g. Playwright) which hasn't been implemented yet.
 
 ---
 
@@ -469,10 +471,10 @@ demo 的 RHS 流程是：
 
 ### 谱算子类
 
-* [ ] `mulIM.wgsl`
-* [ ] `applyLaplacian.wgsl`
-* [ ] `invertLaplacian.wgsl`
-* [ ] `filterSpectrum.wgsl`
+* [x] `mulIM.wgsl`
+* [x] `applyLaplacian.wgsl`
+* [x] `invertLaplacian.wgsl`
+* [x] `filterSpectrum.wgsl`
 
 ### PDE 类
 

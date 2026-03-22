@@ -12,6 +12,11 @@ export class SimulationPipeline {
     legendreSynthesisPipeline: GPUComputePipeline;
     legendreSynthesisDThetaPipeline: GPUComputePipeline;
 
+    mulIMPipeline: GPUComputePipeline;
+    applyLaplacianPipeline: GPUComputePipeline;
+    invertLaplacianPipeline: GPUComputePipeline;
+    filterSpectrumPipeline: GPUComputePipeline;
+
     paramsBuffer: GPUBuffer;
 
     fftForwardBindGroupLayout: GPUBindGroupLayout;
@@ -19,6 +24,9 @@ export class SimulationPipeline {
     legendreAnalysisBindGroupLayout: GPUBindGroupLayout;
     legendreSynthesisBindGroupLayout: GPUBindGroupLayout;
     legendreSynthesisDThetaBindGroupLayout: GPUBindGroupLayout;
+
+    spectralOperatorBindGroupLayout1: GPUBindGroupLayout;
+    spectralOperatorBindGroupLayout2: GPUBindGroupLayout;
 
     constructor(device: GPUDevice, config: SimulationConfig, buffers: SimulationBuffers) {
         this.device = device;
@@ -93,6 +101,25 @@ export class SimulationPipeline {
                 { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } }
             ]
         });
+
+        // Spectral operator layout 1 (mulIM)
+        this.spectralOperatorBindGroupLayout1 = this.device.createBindGroupLayout({
+            label: "spectralOperatorBindGroupLayout1",
+            entries: [
+                { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+                { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } }
+            ]
+        });
+
+        // Spectral operator layout 2 (applyLaplacian, invertLaplacian, filterSpectrum)
+        this.spectralOperatorBindGroupLayout2 = this.device.createBindGroupLayout({
+            label: "spectralOperatorBindGroupLayout2",
+            entries: [
+                { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+                { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+                { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } }
+            ]
+        });
     }
 
     async init(
@@ -100,7 +127,11 @@ export class SimulationPipeline {
         fftInverseCode: string,
         legendreAnalysisCode: string,
         legendreSynthesisCode: string,
-        legendreSynthesisDThetaCode: string
+        legendreSynthesisDThetaCode: string,
+        mulIMCode: string,
+        applyLaplacianCode: string,
+        invertLaplacianCode: string,
+        filterSpectrumCode: string
     ) {
         const fftForwardModule = this.device.createShaderModule({
             label: "fftForwardLon",
@@ -178,6 +209,50 @@ export class SimulationPipeline {
             }),
             compute: {
                 module: legendreSynthesisDThetaModule,
+                entryPoint: "main"
+            }
+        });
+
+        this.mulIMPipeline = await this.device.createComputePipelineAsync({
+            label: "mulIMPipeline",
+            layout: this.device.createPipelineLayout({
+                bindGroupLayouts: [this.spectralOperatorBindGroupLayout1]
+            }),
+            compute: {
+                module: this.device.createShaderModule({ label: "mulIM", code: mulIMCode }),
+                entryPoint: "main"
+            }
+        });
+
+        this.applyLaplacianPipeline = await this.device.createComputePipelineAsync({
+            label: "applyLaplacianPipeline",
+            layout: this.device.createPipelineLayout({
+                bindGroupLayouts: [this.spectralOperatorBindGroupLayout2]
+            }),
+            compute: {
+                module: this.device.createShaderModule({ label: "applyLaplacian", code: applyLaplacianCode }),
+                entryPoint: "main"
+            }
+        });
+
+        this.invertLaplacianPipeline = await this.device.createComputePipelineAsync({
+            label: "invertLaplacianPipeline",
+            layout: this.device.createPipelineLayout({
+                bindGroupLayouts: [this.spectralOperatorBindGroupLayout2]
+            }),
+            compute: {
+                module: this.device.createShaderModule({ label: "invertLaplacian", code: invertLaplacianCode }),
+                entryPoint: "main"
+            }
+        });
+
+        this.filterSpectrumPipeline = await this.device.createComputePipelineAsync({
+            label: "filterSpectrumPipeline",
+            layout: this.device.createPipelineLayout({
+                bindGroupLayouts: [this.spectralOperatorBindGroupLayout2]
+            }),
+            compute: {
+                module: this.device.createShaderModule({ label: "filterSpectrum", code: filterSpectrumCode }),
                 entryPoint: "main"
             }
         });
@@ -271,5 +346,68 @@ export class SimulationPipeline {
         const workgroupCountX = Math.ceil(this.config.nlat / 16);
         const workgroupCountY = Math.ceil((this.config.lmax + 1) / 16);
         pass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
+    }
+
+    passMulIM(pass: GPUComputePassEncoder, aLmInOut: GPUBuffer) {
+        const bindGroup = this.device.createBindGroup({
+            layout: this.spectralOperatorBindGroupLayout1,
+            entries: [
+                { binding: 0, resource: { buffer: aLmInOut } },
+                { binding: 1, resource: { buffer: this.paramsBuffer } } // We need (L, M)
+            ]
+        });
+
+        pass.setPipeline(this.mulIMPipeline);
+        pass.setBindGroup(0, bindGroup);
+        const totalElements = (this.config.lmax + 1) * (this.config.lmax + 1);
+        pass.dispatchWorkgroups(Math.ceil(totalElements / 256));
+    }
+
+    passApplyLaplacian(pass: GPUComputePassEncoder, aLmInOut: GPUBuffer, lapEigsBuffer: GPUBuffer) {
+        const bindGroup = this.device.createBindGroup({
+            layout: this.spectralOperatorBindGroupLayout2,
+            entries: [
+                { binding: 0, resource: { buffer: aLmInOut } },
+                { binding: 1, resource: { buffer: lapEigsBuffer } },
+                { binding: 2, resource: { buffer: this.paramsBuffer } }
+            ]
+        });
+
+        pass.setPipeline(this.applyLaplacianPipeline);
+        pass.setBindGroup(0, bindGroup);
+        const totalElements = (this.config.lmax + 1) * (this.config.lmax + 1);
+        pass.dispatchWorkgroups(Math.ceil(totalElements / 256));
+    }
+
+    passInvertLaplacian(pass: GPUComputePassEncoder, aLmInOut: GPUBuffer, lapEigsBuffer: GPUBuffer) {
+        const bindGroup = this.device.createBindGroup({
+            layout: this.spectralOperatorBindGroupLayout2,
+            entries: [
+                { binding: 0, resource: { buffer: aLmInOut } },
+                { binding: 1, resource: { buffer: lapEigsBuffer } },
+                { binding: 2, resource: { buffer: this.paramsBuffer } }
+            ]
+        });
+
+        pass.setPipeline(this.invertLaplacianPipeline);
+        pass.setBindGroup(0, bindGroup);
+        const totalElements = (this.config.lmax + 1) * (this.config.lmax + 1);
+        pass.dispatchWorkgroups(Math.ceil(totalElements / 256));
+    }
+
+    passFilterSpectrum(pass: GPUComputePassEncoder, aLmInOut: GPUBuffer, specFilterBuffer: GPUBuffer) {
+        const bindGroup = this.device.createBindGroup({
+            layout: this.spectralOperatorBindGroupLayout2,
+            entries: [
+                { binding: 0, resource: { buffer: aLmInOut } },
+                { binding: 1, resource: { buffer: specFilterBuffer } },
+                { binding: 2, resource: { buffer: this.paramsBuffer } }
+            ]
+        });
+
+        pass.setPipeline(this.filterSpectrumPipeline);
+        pass.setBindGroup(0, bindGroup);
+        const totalElements = (this.config.lmax + 1) * (this.config.lmax + 1);
+        pass.dispatchWorkgroups(Math.ceil(totalElements / 256));
     }
 }

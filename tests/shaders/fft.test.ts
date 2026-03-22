@@ -102,7 +102,7 @@ describe("SimulationPipeline FFT passes", () => {
 
     test("Initializes pipelines", async () => {
         const dummyCode = "@compute @workgroup_size(64) fn main() {}";
-        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
+        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
 
         expect(pipeline.fftForwardPipeline).toBeDefined();
         expect(pipeline.fftInversePipeline).toBeDefined();
@@ -110,7 +110,7 @@ describe("SimulationPipeline FFT passes", () => {
 
     test("Dispatches FFT Forward pass", async () => {
         const dummyCode = "@compute @workgroup_size(64) fn main() {}";
-        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
+        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
 
         const mockPass = {
             setPipeline: jest.fn(),
@@ -127,7 +127,7 @@ describe("SimulationPipeline FFT passes", () => {
 
     test("Dispatches FFT Inverse pass", async () => {
         const dummyCode = "@compute @workgroup_size(64) fn main() {}";
-        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
+        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
 
         const mockPass = {
             setPipeline: jest.fn(),
