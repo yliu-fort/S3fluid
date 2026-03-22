@@ -75,35 +75,35 @@ src/
 
 ### `tests/cpu-reference/shtReference.ts`
 
-* [ ] 实现 `_norm_lm(l,m)`
-* [ ] 实现 `analysis(field)`
-* [ ] 实现 `synthesis(a)`
-* [ ] 实现 `dphi(a)`
-* [ ] 实现 `dtheta(a)`
-* [ ] 实现 `applyLaplacian(a)`
-* [ ] 实现 `invertLaplacian(a)`
+* [x] 实现 `_norm_lm(l,m)`
+* [x] 实现 `analysis(field)`
+* [x] 实现 `synthesis(a)`
+* [x] 实现 `dphi(a)`
+* [x] 实现 `dtheta(a)`
+* [x] 实现 `applyLaplacian(a)`
+* [x] 实现 `invertLaplacian(a)`
 
 ### `tests/cpu-reference/modelReference.ts`
 
-* [ ] 实现 `filter_coeffs`
-* [ ] 实现 `streamfunction_from_vorticity`
-* [ ] 实现 `velocity_from_streamfunction`
-* [ ] 实现 `rhs`
-* [ ] 实现 `random_initial_vorticity`
-* [ ] 实现 `kinetic_energy`
-* [ ] 实现 `step_rk4`
+* [x] 实现 `filter_coeffs`
+* [x] 实现 `streamfunction_from_vorticity`
+* [x] 实现 `velocity_from_streamfunction`
+* [x] 实现 `rhs`
+* [x] 实现 `random_initial_vorticity`
+* [x] 实现 `kinetic_energy`
+* [x] 实现 `step_rk4`
 
 ### CPU 参考验收
 
-* [ ] `nlat = lmax + 1`
-* [ ] `nlon = 2 * (lmax + 1)`
-* [ ] `sinTheta = sqrt(max(1 - mu^2, 1e-30))`
-* [ ] `lap_eigs = -l(l+1)`
-* [ ] `u_theta = dpsi_dphi / sinTheta`
-* [ ] `u_phi = -dpsi_dtheta`
-* [ ] `rhs = -adv_lm + nu * laplacian(zeta_lm)`
-* [ ] `step_rk4` 使用 4 次 RHS 且最后再滤波
-* [ ] kinetic energy 用网格积分
+* [x] `nlat = lmax + 1`
+* [x] `nlon = 2 * (lmax + 1)`
+* [x] `sinTheta = sqrt(max(1 - mu^2, 1e-30))`
+* [x] `lap_eigs = -l(l+1)`
+* [x] `u_theta = dpsi_dphi / sinTheta`
+* [x] `u_phi = -dpsi_dtheta`
+* [x] `rhs = -adv_lm + nu * laplacian(zeta_lm)`
+* [x] `step_rk4` 使用 4 次 RHS 且最后再滤波
+* [x] kinetic energy 用网格积分
   [
   E \approx \frac{2\pi}{nlon}\sum_j w_j(-\frac12 \psi\zeta)
   ]

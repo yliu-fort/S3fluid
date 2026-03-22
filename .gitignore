@@ -4,3 +4,7 @@
 **/*.xdmf
 **/*.h5
 /S3fluid.egg-info
+node_modules/
+*.egg-info/
+.pytest_cache/
+__pycache__/
