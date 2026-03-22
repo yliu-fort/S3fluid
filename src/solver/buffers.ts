@@ -30,6 +30,8 @@ export class SimulationBuffers {
     w!: GPUBuffer;
     P_lm!: GPUBuffer;
     dP_lm_dtheta!: GPUBuffer;
+    lapEigs!: GPUBuffer;
+    specFilter!: GPUBuffer;
 
     constructor(device: GPUDevice, config: SimulationConfig) {
         this.device = device;

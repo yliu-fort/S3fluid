@@ -230,4 +230,16 @@ export async function initPrecomputeBuffers(device: GPUDevice, config: Simulatio
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     });
     device.queue.writeBuffer(buffers.dP_lm_dtheta, 0, precomp.dP_lm_dtheta as any);
+
+    buffers.lapEigs = device.createBuffer({
+        size: precomp.lapEigs.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    });
+    device.queue.writeBuffer(buffers.lapEigs, 0, precomp.lapEigs as any);
+
+    buffers.specFilter = device.createBuffer({
+        size: precomp.specFilter.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    });
+    device.queue.writeBuffer(buffers.specFilter, 0, precomp.specFilter as any);
 }
