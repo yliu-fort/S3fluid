@@ -327,7 +327,7 @@ def main() -> None:
     nlon = 2 * (lmax + 1)
 
     dt = 1.0e-2
-    steps = 200
+    steps = 1000
     save_every = 20
     nu = 1.0e-7
 
