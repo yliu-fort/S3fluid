@@ -2,19 +2,19 @@
 
 ## 0. 固定技术边界
 
-* [ ] PDE 固定为
+* [x] PDE 固定为
   [
   \partial_t \zeta + J(\psi,\zeta)=\nu \nabla^2 \zeta,\qquad \zeta=\nabla^2\psi
   ]
-* [ ] 几何固定为单位球面
-* [ ] 纬向离散固定为 `Gauss-Legendre`
-* [ ] 经向离散固定为 `FFT`
-* [ ] 球谐变换固定为显式 `P_l^m` / `dP_l^m/dtheta`
-* [ ] 谱系数只存 `m >= 0`
-* [ ] 时间推进固定为 `RK4`
-* [ ] 稳定化固定为指数谱滤波
-* [ ] 初始化固定为：随机网格场 → analysis → 乘 `l^(-1/3)` → 谱滤波 → 去掉 `(0,0)` 平均模
-* [ ] 诊断固定为：球面涡度可视化 + kinetic energy 曲线
+* [x] 几何固定为单位球面
+* [x] 纬向离散固定为 `Gauss-Legendre`
+* [x] 经向离散固定为 `FFT`
+* [x] 球谐变换固定为显式 `P_l^m` / `dP_l^m/dtheta`
+* [x] 谱系数只存 `m >= 0`
+* [x] 时间推进固定为 `RK4`
+* [x] 稳定化固定为指数谱滤波
+* [x] 初始化固定为：随机网格场 → analysis → 乘 `l^(-1/3)` → 谱滤波 → 去掉 `(0,0)` 平均模
+* [x] 诊断固定为：球面涡度可视化 + kinetic energy 曲线
 
 > 这些都来自 demo 本体，不要改路线。
 
@@ -246,20 +246,20 @@ src/
 
 ### `shaders/mulIM.wgsl`
 
-* [ ] 实现 `i * m * a(m,l)`
+* [x] 实现 `i * m * a(m,l)`
 
 ### `shaders/applyLaplacian.wgsl`
 
-* [ ] 实现 `lapEigs * a`
+* [x] 实现 `lapEigs * a`
 
 ### `shaders/invertLaplacian.wgsl`
 
-* [ ] 实现 `a / (-l(l+1))`
-* [ ] `l=0` 强制为零
+* [x] 实现 `a / (-l(l+1))`
+* [x] `l=0` 强制为零
 
 ### `shaders/filterSpectrum.wgsl`
 
-* [ ] 实现按 `l` 乘 `specFilter`
+* [x] 实现按 `l` 乘 `specFilter`
 
 ### 谱算子测试
 
@@ -276,12 +276,12 @@ src/
 
 ### `shaders/initRandom.wgsl`
 
-* [ ] 生成随机网格场
-* [ ] 调用 analysis
-* [ ] 乘 `initSlope`
-* [ ] 乘 `specFilter`
-* [ ] 把 `(0,0)` 置零
-* [ ] 乘 `amplitude`
+* [x] 生成随机网格场
+* [x] 调用 analysis
+* [x] 乘 `initSlope`
+* [x] 乘 `specFilter`
+* [x] 把 `(0,0)` 置零
+* [x] 乘 `amplitude`
 
 ### 初始化测试
 
@@ -308,24 +308,24 @@ demo 的 RHS 流程是：
 
 ### `shaders/velocityFromPsi.wgsl`
 
-* [ ] 输入 `dpsiDphiGrid`
-* [ ] 输入 `dpsiDthetaGrid`
-* [ ] 输出 `uThetaGrid = dpsiDphiGrid / sinTheta`
-* [ ] 输出 `uPhiGrid = -dpsiDthetaGrid`
+* [x] 输入 `dpsiDphiGrid`
+* [x] 输入 `dpsiDthetaGrid`
+* [x] 输出 `uThetaGrid = dpsiDphiGrid / sinTheta`
+* [x] 输出 `uPhiGrid = -dpsiDthetaGrid`
 
 ### `shaders/advectGrid.wgsl`
 
-* [ ] 输入 `uThetaGrid`
-* [ ] 输入 `uPhiGrid`
-* [ ] 输入 `dzetaDthetaGrid`
-* [ ] 输入 `dzetaDphiGrid`
-* [ ] 输出 `advGrid`
+* [x] 输入 `uThetaGrid`
+* [x] 输入 `uPhiGrid`
+* [x] 输入 `dzetaDthetaGrid`
+* [x] 输入 `dzetaDphiGrid`
+* [x] 输出 `advGrid`
 
 ### `shaders/rhsCompose.wgsl`
 
-* [ ] 输入 `advLM`
-* [ ] 输入 `zetaLM`
-* [ ] 输出 `rhsLM = -advLM + nu * laplacian(zetaLM)`
+* [x] 输入 `advLM`
+* [x] 输入 `zetaLM`
+* [x] 输出 `rhsLM = -advLM + nu * laplacian(zetaLM)`
 
 ### RHS 测试
 
@@ -342,15 +342,15 @@ demo 的 RHS 流程是：
 
 ### `shaders/rk4Stage.wgsl`
 
-* [ ] 生成 `z + coeff * dt * k`
+* [x] 生成 `z + coeff * dt * k`
 
 ### `shaders/rk4Combine.wgsl`
 
-* [ ] 实现
+* [x] 实现
   [
   z_{n+1}=z_n+\frac{dt}{6}(k_1+2k_2+2k_3+k_4)
   ]
-* [ ] 末尾调用 `filterSpectrum`
+* [x] 末尾调用 `filterSpectrum`
 
 ### `src/app/loop.ts`
 
@@ -379,14 +379,14 @@ demo 的 RHS 流程是：
 
 ### `shaders/energyIntegrand.wgsl`
 
-* [ ] 计算局部项 `-0.5 * psi * zeta`
-* [ ] 乘 `w_j`
-* [ ] 预留 `2π/nlon` 因子
+* [x] 计算局部项 `-0.5 * psi * zeta`
+* [x] 乘 `w_j`
+* [x] 预留 `2π/nlon` 因子
 
 ### `shaders/reduceSum.wgsl`
 
-* [ ] 分阶段归约
-* [ ] 输出总能量
+* [x] 分阶段归约
+* [x] 输出总能量
 
 ### 诊断测试
 
@@ -409,15 +409,15 @@ demo 的 RHS 流程是：
 
 ### `shaders/sphere.vert.wgsl`
 
-* [ ] 传位置
-* [ ] 传法线
-* [ ] 传 UV
+* [x] 传位置
+* [x] 传法线
+* [x] 传 UV
 
 ### `shaders/scalarColor.frag.wgsl`
 
-* [ ] 从纹理采样标量场
-* [ ] 做发散色图映射
-* [ ] 暴露 `displayScale`
+* [x] 从纹理采样标量场
+* [x] 做发散色图映射
+* [x] 暴露 `displayScale`
 
 ### 可视化测试
 
@@ -469,26 +469,26 @@ demo 的 RHS 流程是：
 
 ### 谱算子类
 
-* [ ] `mulIM.wgsl`
-* [ ] `applyLaplacian.wgsl`
-* [ ] `invertLaplacian.wgsl`
-* [ ] `filterSpectrum.wgsl`
+* [x] `mulIM.wgsl`
+* [x] `applyLaplacian.wgsl`
+* [x] `invertLaplacian.wgsl`
+* [x] `filterSpectrum.wgsl`
 
 ### PDE 类
 
-* [ ] `initRandom.wgsl`
-* [ ] `velocityFromPsi.wgsl`
-* [ ] `advectGrid.wgsl`
-* [ ] `rhsCompose.wgsl`
-* [ ] `rk4Stage.wgsl`
-* [ ] `rk4Combine.wgsl`
+* [x] `initRandom.wgsl`
+* [x] `velocityFromPsi.wgsl`
+* [x] `advectGrid.wgsl`
+* [x] `rhsCompose.wgsl`
+* [x] `rk4Stage.wgsl`
+* [x] `rk4Combine.wgsl`
 
 ### 诊断与显示类
 
-* [ ] `energyIntegrand.wgsl`
-* [ ] `reduceSum.wgsl`
-* [ ] `sphere.vert.wgsl`
-* [ ] `scalarColor.frag.wgsl`
+* [x] `energyIntegrand.wgsl`
+* [x] `reduceSum.wgsl`
+* [x] `sphere.vert.wgsl`
+* [x] `scalarColor.frag.wgsl`
 
 每个 shader 必须有：
 
