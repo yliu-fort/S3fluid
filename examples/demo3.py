@@ -40,26 +40,58 @@ from scipy.fft import irfft, rfft
 from scipy.special import gammaln, lpmv
 
 
-def _norm_matrix(lmax: int) -> tuple[np.ndarray, np.ndarray]:
-    """返回归一化矩阵 norm[m,l] 和 valid mask(l>=m)。"""
+def _compute_legendre_matrices(lmax: int, mu: np.ndarray, sin_theta: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    使用稳定的递推关系计算正交归一化的缔合勒让德函数 P_l^m(mu) 及其导数。
+    返回:
+        P : (J, M, L)
+        dP: (J, M, L), 这里 dP 是 dP_lm/dtheta
+        valid: (M, L) 布尔矩阵，l >= m 为 True
+    """
+    J = len(mu)
     M = L = lmax + 1
-    m = np.arange(M)[:, None]
-    l = np.arange(L)[None, :]
-    mm = np.broadcast_to(m, (M, L))
-    ll = np.broadcast_to(l, (M, L))
-    valid = ll >= mm
+    P = np.zeros((J, M, L), dtype=np.float64)
+    dP = np.zeros((J, M, L), dtype=np.float64)
+    
+    # 1. 基础值：P_00 = sqrt(1 / 4pi)
+    P[:, 0, 0] = np.sqrt(1.0 / (4.0 * np.pi))
+    
+    # 2. 对角线递推：l = m
+    # P_mm = -sqrt((2m+1)/(2m)) * sin_theta * P_{m-1,m-1}
+    for m in range(1, M):
+        P[:, m, m] = -np.sqrt((2.0 * m + 1.0) / (2.0 * m)) * sin_theta * P[:, m-1, m-1]
+        
+    # 3. 次对角线递推：l = m + 1
+    # P_{m+1,m} = mu * sqrt(2m+3) * P_mm
+    for m in range(M):
+        if m + 1 < L:
+            P[:, m, m+1] = mu * np.sqrt(2.0 * m + 3.0) * P[:, m, m]
+            
+    # 4. 三对角递推：l > m + 1
+    # P_lm = a_lm * mu * P_{l-1,m} - b_lm * P_{l-2,m}
+    for m in range(M):
+        for l in range(m + 2, L):
+            a_lm = np.sqrt((4.0 * l**2 - 1.0) / (l**2 - m**2))
+            b_lm = np.sqrt(((2.0 * l + 1.0) * ((l - 1)**2 - m**2)) / ((2.0 * l - 3.0) * (l**2 - m**2)))
+            P[:, m, l] = a_lm * mu * P[:, m, l-1] - b_lm * P[:, m, l-2]
+            
+    # 5. 计算导数 dP/dtheta
+    # dP/dtheta = (l*mu*P_lm - sqrt((2l+1)(l^2-m^2)/(2l-1)) * P_{l-1,m}) / sin_theta
+    # 注意：sin_theta 在 __post_init__ 中已由 arccos(mu) 计算，并设置了 1e-30 的 floor
+    for m in range(M):
+        for l in range(m, L):
+            if l > 0:
+                c_lm = np.sqrt(((2.0 * l + 1.0) * (l**2 - m**2)) / (2.0 * l - 1.0))
+                dP[:, m, l] = (l * mu * P[:, m, l] - c_lm * P[:, m, l-1]) / sin_theta
+            else:
+                dP[:, m, l] = 0.0
 
-    norm = np.zeros((M, L), dtype=np.float64)
-    lv = ll[valid].astype(np.float64)
-    mv = mm[valid].astype(np.float64)
-    logn = 0.5 * (
-        np.log(2.0 * lv + 1.0)
-        - math.log(4.0 * math.pi)
-        + gammaln(lv - mv + 1.0)
-        - gammaln(lv + mv + 1.0)
-    )
-    norm[valid] = np.exp(logn)
-    return norm, valid
+    # 构造 valid 掩码
+    m_idx = np.arange(M)[:, None]
+    l_idx = np.arange(L)[None, :]
+    valid = l_idx >= m_idx
+    
+    return P, dP, valid
 
 
 @dataclass
@@ -91,30 +123,8 @@ class SphericalHarmonicTransform:
         self.J = J
         self.K = K
 
-        # 稠密索引网格
-        m = np.arange(M, dtype=np.int64)[None, :, None]    # (1,M,1)
-        l = np.arange(L, dtype=np.int64)[None, None, :]    # (1,1,L)
-        mu = self.mu[:, None, None]                        # (J,1,1)
-        sin_theta = self.sin_theta[:, None, None]          # (J,1,1)
-
-        norm_ml, valid_ml = _norm_matrix(self.lmax)
-        self.valid = valid_ml
-        norm = norm_ml[None, :, :]                         # (1,M,L)
-        valid = valid_ml[None, :, :]                       # (1,M,L)
-
-        # 一次性构造所有 P_l^m(mu_j)，轴顺序为 (j,m,l)
-        # lpmv 已包含 Condon-Shortley phase
-        P_raw = lpmv(m, l, mu)
-        P = norm * P_raw
-        P *= valid
-
-        # dP_l^m/dmu = (l*mu*P_l^m - (l+m)P_{l-1}^m)/(mu^2-1)
-        # 对 l=0 的位置，用 max(l-1, 0)；其贡献会在对应系数前自动变成 0
-        l_prev = np.maximum(l - 1, 0)
-        P_prev = lpmv(m, l_prev, mu)
-        dP_dmu_raw = (l * mu * P_raw - (l + m) * P_prev) / (mu * mu - 1.0)
-        dP = -sin_theta * norm * dP_dmu_raw
-        dP *= valid
+        # 使用稳定递推计算 P_{lm} 和 dP_{lm}/dtheta
+        P, dP, self.valid = _compute_legendre_matrices(self.lmax, self.mu, self.sin_theta)
 
         # 存成 C contiguous 张量，避免后续隐式复制
         self.P = np.ascontiguousarray(P, dtype=np.float64)      # (J,M,L)
