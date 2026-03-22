@@ -1,6 +1,6 @@
 import { SOLVER_CONFIG } from './config';
 import { SPECTRAL_COEFFS_F32_COUNT, GRID_POINTS_F32_COUNT } from './layout';
-import { PrecomputedData } from './precompute';
+import type { PrecomputedData } from './precompute';
 
 export class SolverBuffers {
     zetaLM_A!: GPUBuffer;

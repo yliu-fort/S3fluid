@@ -1,5 +1,5 @@
 import { SOLVER_CONFIG } from './config';
-import { PrecomputedData } from './precompute';
+import type { PrecomputedData } from './precompute';
 import { SolverBuffers } from './buffers';
 
 // ... (previous PipelineManager class implementation)
