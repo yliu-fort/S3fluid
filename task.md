@@ -116,68 +116,68 @@ src/
 
 ### `src/solver/config.ts`
 
-* [ ] 定义 `lmax`
-* [ ] 定义 `nlat = lmax + 1`
-* [ ] 定义 `nlon = 2 * (lmax + 1)`
-* [ ] 定义 `dt`
-* [ ] 定义 `nu`
-* [ ] 定义 `filterAlpha`
-* [ ] 定义 `filterOrder`
-* [ ] 定义 `stepsPerFrame`
-* [ ] 定义 `seed`
-* [ ] 定义 `amplitude`
+* [x] 定义 `lmax`
+* [x] 定义 `nlat = lmax + 1`
+* [x] 定义 `nlon = 2 * (lmax + 1)`
+* [x] 定义 `dt`
+* [x] 定义 `nu`
+* [x] 定义 `filterAlpha`
+* [x] 定义 `filterOrder`
+* [x] 定义 `stepsPerFrame`
+* [x] 定义 `seed`
+* [x] 定义 `amplitude`
 
 ### `src/solver/precompute.ts`
 
-* [ ] 生成 `mu`
-* [ ] 生成 `w`
-* [ ] 生成 `theta`
-* [ ] 生成 `sinTheta`
-* [ ] 生成 `phi`
-* [ ] 生成 `P_lm`
-* [ ] 生成 `dP_lm_dtheta`
-* [ ] 生成 `lapEigs`
-* [ ] 生成 `specFilter = exp(-alpha * (l/lmax)^order)`
-* [ ] 生成 `initSlope[l] = l^(-1/3)`，`l=0` 单独处理
+* [x] 生成 `mu`
+* [x] 生成 `w`
+* [x] 生成 `theta`
+* [x] 生成 `sinTheta`
+* [x] 生成 `phi`
+* [x] 生成 `P_lm`
+* [x] 生成 `dP_lm_dtheta`
+* [x] 生成 `lapEigs`
+* [x] 生成 `specFilter = exp(-alpha * (l/lmax)^order)`
+* [x] 生成 `initSlope[l] = l^(-1/3)`，`l=0` 单独处理
 
 ### `src/solver/layout.ts`
 
-* [ ] 定义 `(m,l)` 到线性地址映射
-* [ ] 定义 `(j,k)` 到线性地址映射
-* [ ] 定义复数 `vec2<f32>` 布局
-* [ ] 明确 `l < m` 区域必须置零
-* [ ] 明确 `m` 方向长度为 `lmax + 1`
-* [ ] 明确 `l` 方向长度为 `lmax + 1`
+* [x] 定义 `(m,l)` 到线性地址映射
+* [x] 定义 `(j,k)` 到线性地址映射
+* [x] 定义复数 `vec2<f32>` 布局
+* [x] 明确 `l < m` 区域必须置零
+* [x] 明确 `m` 方向长度为 `lmax + 1`
+* [x] 明确 `l` 方向长度为 `lmax + 1`
 
 ### `src/solver/buffers.ts`
 
-* [ ] 创建 `zetaLM_A`
-* [ ] 创建 `zetaLM_B`
-* [ ] 创建 `psiLM`
-* [ ] 创建 `k1/k2/k3/k4`
-* [ ] 创建 `tmpLM`
-* [ ] 创建 `zetaGrid`
-* [ ] 创建 `psiGrid`
-* [ ] 创建 `dpsiDphiGrid`
-* [ ] 创建 `dpsiDthetaGrid`
-* [ ] 创建 `uThetaGrid`
-* [ ] 创建 `uPhiGrid`
-* [ ] 创建 `dzetaDphiGrid`
-* [ ] 创建 `dzetaDthetaGrid`
-* [ ] 创建 `advGrid`
-* [ ] 创建 `energyTerms`
+* [x] 创建 `zetaLM_A`
+* [x] 创建 `zetaLM_B`
+* [x] 创建 `psiLM`
+* [x] 创建 `k1/k2/k3/k4`
+* [x] 创建 `tmpLM`
+* [x] 创建 `zetaGrid`
+* [x] 创建 `psiGrid`
+* [x] 创建 `dpsiDphiGrid`
+* [x] 创建 `dpsiDthetaGrid`
+* [x] 创建 `uThetaGrid`
+* [x] 创建 `uPhiGrid`
+* [x] 创建 `dzetaDphiGrid`
+* [x] 创建 `dzetaDthetaGrid`
+* [x] 创建 `advGrid`
+* [x] 创建 `energyTerms`
 * [ ] 创建显示纹理
 
 ### 本阶段测试
 
-* [ ] `sum(w)` 近似 2
-* [ ] `mu` 与 `w` 对称性正确
-* [ ] `lapEigs[m,l] == -l(l+1)`
-* [ ] `specFilter[0] == 1`
-* [ ] `specFilter` 对高阶模单调衰减
-* [ ] `initSlope[l>0] ~ l^(-1/3)`
-* [ ] 任意索引不越界
-* [ ] ping-pong 正确切换
+* [x] `sum(w)` 近似 2
+* [x] `mu` 与 `w` 对称性正确
+* [x] `lapEigs[m,l] == -l(l+1)`
+* [x] `specFilter[0] == 1`
+* [x] `specFilter` 对高阶模单调衰减
+* [x] `initSlope[l>0] ~ l^(-1/3)`
+* [x] 任意索引不越界
+* [x] ping-pong 正确切换
 
 ---
 
