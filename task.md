@@ -166,7 +166,7 @@ src/
 * [x] 创建 `dzetaDthetaGrid`
 * [x] 创建 `advGrid`
 * [x] 创建 `energyTerms`
-* [ ] 创建显示纹理
+* [x] 创建显示纹理
 
 ### 本阶段测试
 
@@ -354,15 +354,15 @@ demo 的 RHS 流程是：
 
 ### `src/app/loop.ts`
 
-* [ ] 每帧执行 `stepsPerFrame` 次 RK4
-* [ ] 暂停时不推进
-* [ ] 推进后更新显示与诊断
+* [x] 每帧执行 `stepsPerFrame` 次 RK4
+* [x] 暂停时不推进
+* [x] 推进后更新显示与诊断
 
 ### RK4 测试
 
 * [ ] `dt=0` 时状态不变
 * [ ] 只开扩散时单模衰减正确
-* [ ] `dt` 减半后全局误差呈 4 阶收敛趋势
+* [x] `dt` 减半后全局误差呈 4 阶收敛趋势
 * [ ] GPU/CPU 单步结果一致
 * [ ] 1000 步无 NaN/Inf
 
@@ -372,10 +372,10 @@ demo 的 RHS 流程是：
 
 ### `src/solver/diagnostics.ts`
 
-* [ ] 合成 `zetaGrid`
-* [ ] 合成 `psiGrid`
-* [ ] 管理能量历史数组
-* [ ] 管理 snapshot 采样周期
+* [x] 合成 `zetaGrid`
+* [x] 合成 `psiGrid`
+* [x] 管理能量历史数组
+* [x] 管理 snapshot 采样周期
 
 ### `shaders/energyIntegrand.wgsl`
 
@@ -402,10 +402,10 @@ demo 的 RHS 流程是：
 
 ### `render/sphereView.ts`
 
-* [ ] 创建球体 mesh
-* [ ] 建立 `(phi, theta)` 到 UV 的映射
-* [ ] 把 `zetaGrid` 上传为纹理
-* [ ] 支持每帧刷新纹理
+* [x] 创建球体 mesh
+* [x] 建立 `(phi, theta)` 到 UV 的映射
+* [x] 把 `zetaGrid` 上传为纹理
+* [x] 支持每帧刷新纹理
 
 ### `shaders/sphere.vert.wgsl`
 
@@ -434,23 +434,23 @@ demo 的 RHS 流程是：
 
 ### `app/gui.ts`
 
-* [ ] `lmax`
-* [ ] `dt`
-* [ ] `nu`
-* [ ] `filterAlpha`
-* [ ] `filterOrder`
-* [ ] `seed`
-* [ ] `amplitude`
-* [ ] `stepsPerFrame`
-* [ ] `displayScale`
-* [ ] `pause`
-* [ ] `reset`
-* [ ] `showEnergy`
+* [x] `lmax`
+* [x] `dt`
+* [x] `nu`
+* [x] `filterAlpha`
+* [x] `filterOrder`
+* [x] `seed`
+* [x] `amplitude`
+* [x] `stepsPerFrame`
+* [x] `displayScale`
+* [x] `pause`
+* [x] `reset`
+* [x] `showEnergy`
 
 ### GUI 测试
 
 * [ ] 参数变更立即生效
-* [ ] `pause` 后状态冻结
+* [x] `pause` 后状态冻结
 * [ ] `reset(seed)` 可复现
 * [ ] 改 `lmax` 后完整重建全部资源
 * [ ] 重建后能继续稳定推进

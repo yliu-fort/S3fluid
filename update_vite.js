@@ -1,4 +1,5 @@
-
+const fs = require('fs');
+fs.writeFileSync('vite.config.ts', `
 import { UserConfig } from 'vite';
 
 const config: UserConfig = {
@@ -12,3 +13,4 @@ const config: UserConfig = {
   }
 };
 export default config;
+`);
