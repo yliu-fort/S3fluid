@@ -38,6 +38,7 @@ class MainApp {
     private rk4Combine!: GPUComputePipeline;
     private energyIntegrand!: GPUComputePipeline;
     private reduceSum!: GPUComputePipeline;
+    private initSpectrum!: GPUComputePipeline;
 
     private configBuffer!: GPUBuffer;
     private rhsConfigBuffer!: GPUBuffer;
@@ -135,7 +136,8 @@ class MainApp {
             this.rk4Stage,
             this.rk4Combine,
             this.energyIntegrand,
-            this.reduceSum
+            this.reduceSum,
+            this.initSpectrum
         ] = await Promise.all([
             this.pipelines.createComputePipeline('fftForwardLon.wgsl'),
             this.pipelines.createComputePipeline('fftInverseLon.wgsl'),
@@ -152,7 +154,8 @@ class MainApp {
             this.pipelines.createComputePipeline('rk4Stage.wgsl'),
             this.pipelines.createComputePipeline('rk4Combine.wgsl'),
             this.pipelines.createComputePipeline('energyIntegrand.wgsl'),
-            this.pipelines.createComputePipeline('reduceSum.wgsl')
+            this.pipelines.createComputePipeline('reduceSum.wgsl'),
+            this.pipelines.createComputePipeline('initSpectrum.wgsl')
         ]);
 
         const initRandom = await this.pipelines.createComputePipeline('initRandom.wgsl');
@@ -185,24 +188,24 @@ class MainApp {
 
         this.dispatchAnalysis(commandEncoder, this.buffers.zetaGrid, this.buffers.zetaLM_A);
 
-        const filterBg0 = this.device.createBindGroup({
-            layout: this.filterSpectrum.getBindGroupLayout(0),
+        const initSpecBg0 = this.device.createBindGroup({
+            layout: this.initSpectrum.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: this.buffers.zetaLM_A } },
-                { binding: 1, resource: { buffer: this.buffers.specFilterBuffer } },
-                { binding: 2, resource: { buffer: this.buffers.zetaLM_A } }
+                { binding: 1, resource: { buffer: this.buffers.initSlopeBuffer } },
+                { binding: 2, resource: { buffer: this.buffers.specFilterBuffer } }
             ]
         });
         const configBg1 = this.device.createBindGroup({
-            layout: this.filterSpectrum.getBindGroupLayout(1),
+            layout: this.initSpectrum.getBindGroupLayout(1),
             entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
         });
-        const filterPass = commandEncoder.beginComputePass();
-        filterPass.setPipeline(this.filterSpectrum);
-        filterPass.setBindGroup(0, filterBg0);
-        filterPass.setBindGroup(1, configBg1);
-        filterPass.dispatchWorkgroups(Math.ceil((SOLVER_CONFIG.lmax + 1) / 16), Math.ceil((SOLVER_CONFIG.lmax + 1) / 16));
-        filterPass.end();
+        const specPass = commandEncoder.beginComputePass();
+        specPass.setPipeline(this.initSpectrum);
+        specPass.setBindGroup(0, initSpecBg0);
+        specPass.setBindGroup(1, configBg1);
+        specPass.dispatchWorkgroups(Math.ceil((SOLVER_CONFIG.lmax + 1) / 16), Math.ceil((SOLVER_CONFIG.lmax + 1) / 16));
+        specPass.end();
 
         this.device.queue.submit([commandEncoder.finish()]);
 
@@ -213,11 +216,6 @@ class MainApp {
     }
 
     private dispatchAnalysis(encoder: GPUCommandEncoder, gridIn: GPUBuffer, coeffOut: GPUBuffer) {
-        const configBg1 = this.device.createBindGroup({
-            layout: this.forwardFFT.getBindGroupLayout(1),
-            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
-        });
-
         const fftPass = encoder.beginComputePass();
         fftPass.setPipeline(this.forwardFFT);
         fftPass.setBindGroup(0, this.device.createBindGroup({
@@ -228,7 +226,10 @@ class MainApp {
                 { binding: 2, resource: { buffer: this.buffers.phiBuffer } }
             ]
         }));
-        fftPass.setBindGroup(1, configBg1);
+        fftPass.setBindGroup(1, this.device.createBindGroup({
+            layout: this.forwardFFT.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         fftPass.dispatchWorkgroups(Math.ceil((SOLVER_CONFIG.lmax + 1) / 16), Math.ceil(SOLVER_CONFIG.nlat / 16));
         fftPass.end();
 
@@ -243,17 +244,15 @@ class MainApp {
                 { binding: 3, resource: { buffer: this.buffers.P_lmBuffer } }
             ]
         }));
-        legPass.setBindGroup(1, configBg1);
+        legPass.setBindGroup(1, this.device.createBindGroup({
+            layout: this.legendreAnalysis.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         legPass.dispatchWorkgroups(Math.ceil((SOLVER_CONFIG.lmax + 1) / 16), Math.ceil((SOLVER_CONFIG.lmax + 1) / 16));
         legPass.end();
     }
 
     private dispatchSynthesis(encoder: GPUCommandEncoder, coeffIn: GPUBuffer, gridOut: GPUBuffer) {
-        const configBg1 = this.device.createBindGroup({
-            layout: this.legendreSynthesis.getBindGroupLayout(1),
-            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
-        });
-
         const legPass = encoder.beginComputePass();
         legPass.setPipeline(this.legendreSynthesis);
         legPass.setBindGroup(0, this.device.createBindGroup({
@@ -264,7 +263,10 @@ class MainApp {
                 { binding: 2, resource: { buffer: this.buffers.P_lmBuffer } }
             ]
         }));
-        legPass.setBindGroup(1, configBg1);
+        legPass.setBindGroup(1, this.device.createBindGroup({
+            layout: this.legendreSynthesis.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         legPass.dispatchWorkgroups(Math.ceil(SOLVER_CONFIG.nlat / 16), Math.ceil((SOLVER_CONFIG.lmax + 1) / 16));
         legPass.end();
 
@@ -278,7 +280,10 @@ class MainApp {
                 { binding: 2, resource: { buffer: this.buffers.phiBuffer } }
             ]
         }));
-        fftPass.setBindGroup(1, configBg1);
+        fftPass.setBindGroup(1, this.device.createBindGroup({
+            layout: this.inverseFFT.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         fftPass.dispatchWorkgroups(Math.ceil(SOLVER_CONFIG.nlon / 16), Math.ceil(SOLVER_CONFIG.nlat / 16));
         fftPass.end();
     }
@@ -286,10 +291,6 @@ class MainApp {
     private dispatchRHS(encoder: GPUCommandEncoder, zetaIn: GPUBuffer, rhsOut: GPUBuffer) {
         const Lmax = SOLVER_CONFIG.lmax;
         const wkL = Math.ceil((Lmax + 1) / 16);
-        const configBg1 = this.device.createBindGroup({
-            layout: this.invertLaplacian.getBindGroupLayout(1),
-            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
-        });
 
         // 1. psi_lm = invert_laplacian(zeta_lm)
         const pInv = encoder.beginComputePass();
@@ -302,7 +303,10 @@ class MainApp {
                 { binding: 2, resource: { buffer: this.buffers.psiLM } }
             ]
         }));
-        pInv.setBindGroup(1, configBg1);
+        pInv.setBindGroup(1, this.device.createBindGroup({
+            layout: this.invertLaplacian.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         pInv.dispatchWorkgroups(wkL, wkL);
         pInv.end();
 
@@ -317,7 +321,10 @@ class MainApp {
                 { binding: 1, resource: { buffer: this.buffers.tmpLM } }
             ]
         }));
-        pMul.setBindGroup(1, configBg1);
+        pMul.setBindGroup(1, this.device.createBindGroup({
+            layout: this.mulIM.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         pMul.dispatchWorkgroups(wkL, wkL);
         pMul.end();
 
@@ -334,7 +341,10 @@ class MainApp {
                 { binding: 2, resource: { buffer: this.buffers.dP_lm_dthetaBuffer } }
             ]
         }));
-        legPassD.setBindGroup(1, configBg1);
+        legPassD.setBindGroup(1, this.device.createBindGroup({
+            layout: this.legendreSynthesisDTheta.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         legPassD.dispatchWorkgroups(Math.ceil(SOLVER_CONFIG.nlat / 16), wkL);
         legPassD.end();
 
@@ -348,7 +358,10 @@ class MainApp {
                 { binding: 2, resource: { buffer: this.buffers.phiBuffer } }
             ]
         }));
-        fftPass.setBindGroup(1, configBg1);
+        fftPass.setBindGroup(1, this.device.createBindGroup({
+            layout: this.inverseFFT.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         fftPass.dispatchWorkgroups(Math.ceil(SOLVER_CONFIG.nlon / 16), Math.ceil(SOLVER_CONFIG.nlat / 16));
         fftPass.end();
 
@@ -365,7 +378,10 @@ class MainApp {
                 { binding: 4, resource: { buffer: this.buffers.uPhiGrid } }
             ]
         }));
-        velPass.setBindGroup(1, configBg1);
+        velPass.setBindGroup(1, this.device.createBindGroup({
+            layout: this.velocityFromPsi.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         velPass.dispatchWorkgroups(Math.ceil(SOLVER_CONFIG.nlon / 16), Math.ceil(SOLVER_CONFIG.nlat / 16));
         velPass.end();
 
@@ -376,14 +392,17 @@ class MainApp {
             layout: this.mulIM.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: zetaIn } },
-                { binding: 1, resource: { buffer: this.buffers.tmpLM } }
+                { binding: 1, resource: { buffer: this.buffers.tmpLM2 } }
             ]
         }));
-        pMul2.setBindGroup(1, configBg1);
+        pMul2.setBindGroup(1, this.device.createBindGroup({
+            layout: this.mulIM.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         pMul2.dispatchWorkgroups(wkL, wkL);
         pMul2.end();
 
-        this.dispatchSynthesis(encoder, this.buffers.tmpLM, this.buffers.dzetaDphiGrid);
+        this.dispatchSynthesis(encoder, this.buffers.tmpLM2, this.buffers.dzetaDphiGrid);
 
         const legPassD2 = encoder.beginComputePass();
         legPassD2.setPipeline(this.legendreSynthesisDTheta);
@@ -395,7 +414,10 @@ class MainApp {
                 { binding: 2, resource: { buffer: this.buffers.dP_lm_dthetaBuffer } }
             ]
         }));
-        legPassD2.setBindGroup(1, configBg1);
+        legPassD2.setBindGroup(1, this.device.createBindGroup({
+            layout: this.legendreSynthesisDTheta.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         legPassD2.dispatchWorkgroups(Math.ceil(SOLVER_CONFIG.nlat / 16), wkL);
         legPassD2.end();
 
@@ -409,7 +431,10 @@ class MainApp {
                 { binding: 2, resource: { buffer: this.buffers.phiBuffer } }
             ]
         }));
-        fftPass2.setBindGroup(1, configBg1);
+        fftPass2.setBindGroup(1, this.device.createBindGroup({
+            layout: this.inverseFFT.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         fftPass2.dispatchWorkgroups(Math.ceil(SOLVER_CONFIG.nlon / 16), Math.ceil(SOLVER_CONFIG.nlat / 16));
         fftPass2.end();
 
@@ -427,7 +452,10 @@ class MainApp {
                 { binding: 5, resource: { buffer: this.buffers.advGrid } },
             ]
         }));
-        advPass.setBindGroup(1, configBg1);
+        advPass.setBindGroup(1, this.device.createBindGroup({
+            layout: this.advectGrid.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         advPass.dispatchWorkgroups(Math.ceil(SOLVER_CONFIG.nlon / 16), Math.ceil(SOLVER_CONFIG.nlat / 16));
         advPass.end();
 
@@ -441,12 +469,18 @@ class MainApp {
             entries: [
                 { binding: 0, resource: { buffer: this.buffers.tmpLM } },
                 { binding: 1, resource: { buffer: this.buffers.specFilterBuffer } },
-                { binding: 2, resource: { buffer: this.buffers.tmpLM } }
+                { binding: 2, resource: { buffer: this.buffers.advGrid } } // use advGrid as tmp out to avoid rw conflict
             ]
         }));
-        filterPass.setBindGroup(1, configBg1);
+        filterPass.setBindGroup(1, this.device.createBindGroup({
+            layout: this.filterSpectrum.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         filterPass.dispatchWorkgroups(wkL, wkL);
         filterPass.end();
+
+        // copy back
+        encoder.copyBufferToBuffer(this.buffers.advGrid, 0, this.buffers.tmpLM, 0, this.buffers.tmpLM.size);
 
         // 7. rhsCompose
         const rhsCData = new Float32Array([SOLVER_CONFIG.nu, 0, 0, 0]);
@@ -574,7 +608,13 @@ class MainApp {
                 { binding: 5, resource: { buffer: this.buffers.zetaLM_B } }, // Next state
             ]
         }));
-        combPass.setBindGroup(1, configBg1Full);
+        combPass.setBindGroup(1, this.device.createBindGroup({
+            layout: this.rk4Combine.getBindGroupLayout(1),
+            entries: [
+                { binding: 0, resource: { buffer: this.configBuffer } },
+                { binding: 1, resource: { buffer: this.rk4ConfigBuffer2 } }
+            ]
+        }));
         combPass.dispatchWorkgroups(wkL, wkL);
         combPass.end();
 
@@ -600,11 +640,6 @@ class MainApp {
 
     private dispatchDiagnostics(encoder: GPUCommandEncoder) {
         // 1. Energy Integrand
-        const configBg1 = this.device.createBindGroup({
-            layout: this.energyIntegrand.getBindGroupLayout(1),
-            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
-        });
-
         const intPass = encoder.beginComputePass();
         intPass.setPipeline(this.energyIntegrand);
         intPass.setBindGroup(0, this.device.createBindGroup({
@@ -616,7 +651,10 @@ class MainApp {
                 { binding: 3, resource: { buffer: this.buffers.energyTerms } }
             ]
         }));
-        intPass.setBindGroup(1, configBg1);
+        intPass.setBindGroup(1, this.device.createBindGroup({
+            layout: this.energyIntegrand.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: { buffer: this.configBuffer } }]
+        }));
         intPass.dispatchWorkgroups(Math.ceil(SOLVER_CONFIG.nlon / 16), Math.ceil(SOLVER_CONFIG.nlat / 16));
         intPass.end();
 
@@ -705,5 +743,6 @@ class MainApp {
 
 // Bootstrap
 window.addEventListener('DOMContentLoaded', () => {
-    new MainApp();
+    const app = new MainApp();
+    (window as any).app = app;
 });
