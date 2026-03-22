@@ -40,8 +40,8 @@ DT = 1.0e-2
 VS_PASSTHROUGH = '''
 $HEADER$
 void main() {
-    gl_Position = projection_mat * modelview_mat * vec4(pos, 1.0);
-    tex_coord0 = tex_coords0;
+    gl_Position = projection_mat * modelview_mat * vec4(vPosition.xy, 0.0, 1.0);
+    tex_coord0 = vTexCoords0;
 }
 '''
 

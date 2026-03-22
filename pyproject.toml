@@ -16,6 +16,7 @@ dependencies = [
     "numpy>=1.20",
     "scipy>=1.7",
     "matplotlib>=3.4",
+    "cartopy",
     "kivy>=2.1.0",
 ]
 
