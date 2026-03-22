@@ -3,3 +3,4 @@
 /__pycache__
 **/*.xdmf
 **/*.h5
+/S3fluid.egg-info
