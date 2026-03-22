@@ -7,7 +7,9 @@
     "example": "examples"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npx jest",
+    "build": "vite build",
+    "dev": "vite"
   },
   "repository": {
     "type": "git",
@@ -22,6 +24,7 @@
   },
   "homepage": "https://github.com/yliu-fort/S3fluid#readme",
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.5.0",
     "@webgpu/types": "^0.1.69",
@@ -29,7 +32,8 @@
     "jest-environment-jsdom": "^30.3.0",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^8.0.1"
   },
   "dependencies": {
     "@types/three": "^0.183.1",
