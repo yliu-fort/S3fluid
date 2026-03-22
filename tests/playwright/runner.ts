@@ -10,6 +10,10 @@ import fftInverseLonSrc from '../../src/shaders/fftInverseLon.wgsl?raw';
 import legendreAnalysisSrc from '../../src/shaders/legendreAnalysis.wgsl?raw';
 import legendreSynthesisSrc from '../../src/shaders/legendreSynthesis.wgsl?raw';
 import legendreSynthesisDThetaSrc from '../../src/shaders/legendreSynthesisDTheta.wgsl?raw';
+import mulIMSrc from '../../src/shaders/mulIM.wgsl?raw';
+import applyLaplacianSrc from '../../src/shaders/applyLaplacian.wgsl?raw';
+import invertLaplacianSrc from '../../src/shaders/invertLaplacian.wgsl?raw';
+import filterSpectrumSrc from '../../src/shaders/filterSpectrum.wgsl?raw';
 
 class TestRunner {
     device: GPUDevice | null = null;
@@ -36,7 +40,11 @@ class TestRunner {
             fftInverseLonSrc,
             legendreAnalysisSrc,
             legendreSynthesisSrc,
-            legendreSynthesisDThetaSrc
+            legendreSynthesisDThetaSrc,
+            mulIMSrc,
+            applyLaplacianSrc,
+            invertLaplacianSrc,
+            filterSpectrumSrc
         );
         (window as any).TestRunnerReady = true;
     }
@@ -126,6 +134,54 @@ class TestRunner {
         const commandEncoder = this.device.createCommandEncoder();
         const passEncoder = commandEncoder.beginComputePass();
         this.pipeline.passLegendreSynthesisDTheta(passEncoder, this.buffers.zetaLM_A, this.buffers.tmpLM, this.buffers.dP_lm_dtheta);
+        passEncoder.end();
+        this.device.queue.submit([commandEncoder.finish()]);
+        const spectralSize = getSpectralSize(this.config) * 2;
+        return this.readFloat32Array(this.buffers.tmpLM, spectralSize);
+    }
+
+    async testMulIM(inputLM: Float32Array): Promise<Float32Array> {
+        if (!this.device || !this.buffers || !this.pipeline || !this.config) throw new Error("Not initialized");
+        this.uploadFloat32Array(this.buffers.zetaLM_A, inputLM);
+        const commandEncoder = this.device.createCommandEncoder();
+        const passEncoder = commandEncoder.beginComputePass();
+        this.pipeline.passMulIM(passEncoder, this.buffers.zetaLM_A, this.buffers.tmpLM);
+        passEncoder.end();
+        this.device.queue.submit([commandEncoder.finish()]);
+        const spectralSize = getSpectralSize(this.config) * 2;
+        return this.readFloat32Array(this.buffers.tmpLM, spectralSize);
+    }
+
+    async testApplyLaplacian(inputLM: Float32Array): Promise<Float32Array> {
+        if (!this.device || !this.buffers || !this.pipeline || !this.config) throw new Error("Not initialized");
+        this.uploadFloat32Array(this.buffers.zetaLM_A, inputLM);
+        const commandEncoder = this.device.createCommandEncoder();
+        const passEncoder = commandEncoder.beginComputePass();
+        this.pipeline.passApplyLaplacian(passEncoder, this.buffers.zetaLM_A, this.buffers.lapEigs, this.buffers.tmpLM);
+        passEncoder.end();
+        this.device.queue.submit([commandEncoder.finish()]);
+        const spectralSize = getSpectralSize(this.config) * 2;
+        return this.readFloat32Array(this.buffers.tmpLM, spectralSize);
+    }
+
+    async testInvertLaplacian(inputLM: Float32Array): Promise<Float32Array> {
+        if (!this.device || !this.buffers || !this.pipeline || !this.config) throw new Error("Not initialized");
+        this.uploadFloat32Array(this.buffers.zetaLM_A, inputLM);
+        const commandEncoder = this.device.createCommandEncoder();
+        const passEncoder = commandEncoder.beginComputePass();
+        this.pipeline.passInvertLaplacian(passEncoder, this.buffers.zetaLM_A, this.buffers.lapEigs, this.buffers.tmpLM);
+        passEncoder.end();
+        this.device.queue.submit([commandEncoder.finish()]);
+        const spectralSize = getSpectralSize(this.config) * 2;
+        return this.readFloat32Array(this.buffers.tmpLM, spectralSize);
+    }
+
+    async testFilterSpectrum(inputLM: Float32Array): Promise<Float32Array> {
+        if (!this.device || !this.buffers || !this.pipeline || !this.config) throw new Error("Not initialized");
+        this.uploadFloat32Array(this.buffers.zetaLM_A, inputLM);
+        const commandEncoder = this.device.createCommandEncoder();
+        const passEncoder = commandEncoder.beginComputePass();
+        this.pipeline.passFilterSpectrum(passEncoder, this.buffers.zetaLM_A, this.buffers.specFilter, this.buffers.tmpLM);
         passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
         const spectralSize = getSpectralSize(this.config) * 2;

@@ -263,11 +263,11 @@ src/
 
 ### 谱算子测试
 
-* [ ] `m=0` 经 `mulIM` 后全零
-* [ ] `applyLaplacian` 精确乘以 `-l(l+1)`
-* [ ] `invertLaplacian(applyLaplacian(a)) ≈ a`，忽略 `l=0`
-* [ ] `filterSpectrum` 不改 `l=0`
-* [ ] 高频模被压低
+* [x] `m=0` 经 `mulIM` 后全零
+* [x] `applyLaplacian` 精确乘以 `-l(l+1)`
+* [x] `invertLaplacian(applyLaplacian(a)) ≈ a`，忽略 `l=0`
+* [x] `filterSpectrum` 不改 `l=0`
+* [x] 高频模被压低
 * [ ] GPU/CPU 一致
 
 ---
