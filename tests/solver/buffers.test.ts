@@ -6,16 +6,15 @@ describe("Buffer Allocations", () => {
     let mockDevice: GPUDevice;
 
     beforeAll(() => {
-        // mock GPUBufferUsage enum missing in JSDom environment
-        (global as any).GPUBufferUsage = {
+        (globalThis as any).GPUBufferUsage = {
             STORAGE: 0x0080,
             COPY_DST: 0x0008,
             COPY_SRC: 0x0004
         };
+        (globalThis as any).GPUBuffer = class GPUBuffer {};
     });
 
     beforeEach(() => {
-        // create a minimal mock for GPUDevice so we don't need headless-gl webgpu
         mockDevice = {
             createBuffer: jest.fn().mockImplementation((desc) => {
                 return { size: desc.size, label: desc.label, usage: desc.usage };
@@ -27,23 +26,21 @@ describe("Buffer Allocations", () => {
         const config = createConfig({ lmax: 31 });
         const buffers = new SimulationBuffers(mockDevice, config);
 
-        // Calculate expected sizes in bytes based on vec2<f32> complex numbers
-        const expectedSpectralBytes = getSpectralSize(config) * 8; // 8 bytes for vec2<f32>
-        const expectedGridBytes = getGridSize(config) * 4;       // 4 bytes for f32
+        const expectedSpectralBytes = getSpectralSize(config) * 8;
+        const expectedGridBytes = getGridSize(config) * 4;
 
         expect(buffers.zetaLM_A).toEqual({
             label: "zetaLM_A",
             size: expectedSpectralBytes,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+            usage: (globalThis as any).GPUBufferUsage.STORAGE | (globalThis as any).GPUBufferUsage.COPY_DST | (globalThis as any).GPUBufferUsage.COPY_SRC
         });
 
         expect(buffers.zetaGrid).toEqual({
             label: "zetaGrid",
             size: expectedGridBytes,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+            usage: (globalThis as any).GPUBufferUsage.STORAGE | (globalThis as any).GPUBufferUsage.COPY_DST | (globalThis as any).GPUBufferUsage.COPY_SRC
         });
 
-        // Test mock device received exact count of allocations
-        expect(mockDevice.createBuffer).toHaveBeenCalledTimes(18); // 8 spectral + 10 grid
+        expect(mockDevice.createBuffer).toHaveBeenCalledTimes(18);
     });
 });

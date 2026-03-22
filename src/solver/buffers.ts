@@ -1,4 +1,5 @@
-import { SimulationConfig } from "./config";
+if (typeof globalThis.GPUBuffer === "undefined") { (globalThis as any).GPUBuffer = class GPUBuffer {}; }
+import type { SimulationConfig } from "./config";
 import { getSpectralSize, getGridSize } from "./layout";
 
 export class SimulationBuffers {
@@ -26,6 +27,10 @@ export class SimulationBuffers {
 
     energyTerms: GPUBuffer;
 
+    w!: GPUBuffer;
+    P_lm!: GPUBuffer;
+    dP_lm_dtheta!: GPUBuffer;
+
     constructor(device: GPUDevice, config: SimulationConfig) {
         this.device = device;
         this.config = config;
@@ -43,9 +48,9 @@ export class SimulationBuffers {
         this.k2 = this.createBuffer(spectralBytes, "k2");
         this.k3 = this.createBuffer(spectralBytes, "k3");
         this.k4 = this.createBuffer(spectralBytes, "k4");
-        this.tmpLM = this.createBuffer(spectralBytes, "tmpLM");
+        this.tmpLM = this.createBuffer(spectralBytes, "tmpLM", GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC);
 
-        this.zetaGrid = this.createBuffer(gridBytes, "zetaGrid");
+        this.zetaGrid = this.createBuffer(gridBytes, "zetaGrid", GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC);
         this.psiGrid = this.createBuffer(gridBytes, "psiGrid");
         this.dpsiDphiGrid = this.createBuffer(gridBytes, "dpsiDphiGrid");
         this.dpsiDthetaGrid = this.createBuffer(gridBytes, "dpsiDthetaGrid");

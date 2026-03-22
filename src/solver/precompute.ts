@@ -1,4 +1,5 @@
-import { SimulationConfig } from "./config";
+import type { SimulationConfig } from "./config";
+import type { SimulationBuffers } from "./buffers";
 
 export function gammaln(x: number): number {
     const p = [
@@ -101,10 +102,10 @@ export function precompute(config: SimulationConfig): PrecomputedData {
     const sinTheta = new Float32Array(J);
 
     for (let j = 0; j < J; j++) {
-        mu[j] = gauss.x[j];
-        w[j] = gauss.w[j];
-        theta[j] = Math.acos(mu[j]);
-        sinTheta[j] = Math.sqrt(Math.max(1.0 - mu[j] * mu[j], 1e-30));
+        mu[j] = gauss.x[j] || 0.0;
+        w[j] = gauss.w[j] || 0.0;
+        theta[j] = Math.acos(mu[j]!);
+        sinTheta[j] = Math.sqrt(Math.max(1.0 - mu[j]! * mu[j]!, 1e-30));
     }
 
     const phi = new Float32Array(nlon);
@@ -144,14 +145,14 @@ export function precompute(config: SimulationConfig): PrecomputedData {
                 let nm_idx = m * L + l;
 
                 if (valid[nm_idx]) {
-                    let p_raw = lpmv(m, l, mu[j]);
-                    let p_val = norm[nm_idx] * p_raw;
+                    let p_raw = lpmv(m, l, mu[j]!);
+                    let p_val = norm[nm_idx]! * p_raw;
                     P_lm[idx] = p_val;
 
                     let l_prev = Math.max(l - 1, 0);
-                    let p_prev = lpmv(m, l_prev, mu[j]);
-                    let dp_dmu_raw = (l * mu[j] * p_raw - (l + m) * p_prev) / (mu[j] * mu[j] - 1.0);
-                    dP_lm_dtheta[idx] = -sinTheta[j] * norm[nm_idx] * dp_dmu_raw;
+                    let p_prev = lpmv(m, l_prev, mu[j]!);
+                    let dp_dmu_raw = (l * mu[j]! * p_raw - (l + m) * p_prev) / (mu[j]! * mu[j]! - 1.0);
+                    dP_lm_dtheta[idx] = -sinTheta[j]! * norm[nm_idx]! * dp_dmu_raw;
                 } else {
                     P_lm[idx] = 0;
                     dP_lm_dtheta[idx] = 0;
@@ -206,4 +207,27 @@ export function precompute(config: SimulationConfig): PrecomputedData {
         specFilter,
         initSlope
     };
+}
+
+export async function initPrecomputeBuffers(device: GPUDevice, config: SimulationConfig, buffers: SimulationBuffers) {
+    const precomp = precompute(config);
+
+    // allocate buffers that are strictly read-only after init
+    buffers.w = device.createBuffer({
+        size: precomp.w.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    });
+    device.queue.writeBuffer(buffers.w, 0, precomp.w as any);
+
+    buffers.P_lm = device.createBuffer({
+        size: precomp.P_lm.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    });
+    device.queue.writeBuffer(buffers.P_lm, 0, precomp.P_lm as any);
+
+    buffers.dP_lm_dtheta = device.createBuffer({
+        size: precomp.dP_lm_dtheta.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    });
+    device.queue.writeBuffer(buffers.dP_lm_dtheta, 0, precomp.dP_lm_dtheta as any);
 }

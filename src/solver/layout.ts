@@ -1,4 +1,4 @@
-import { SimulationConfig } from "./config";
+import type { SimulationConfig } from "./config";
 
 export function getLmIndex(m: number, l: number, config: SimulationConfig): number {
     const L = config.lmax + 1;
