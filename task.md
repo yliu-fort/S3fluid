@@ -214,26 +214,26 @@ src/
 
 ### `shaders/legendreAnalysis.wgsl`
 
-* [ ] 输入 `F(j,m)`
-* [ ] 使用 `w_j`、`P_lm(j,l,m)`
-* [ ] 输出 `a(m,l)`
+* [x] 输入 `F(j,m)`
+* [x] 使用 `w_j`、`P_lm(j,l,m)`
+* [x] 输出 `a(m,l)`
 
 ### `shaders/legendreSynthesis.wgsl`
 
-* [ ] 输入 `a(m,l)`
-* [ ] 输出 `freq(j,m)`
+* [x] 输入 `a(m,l)`
+* [x] 输出 `freq(j,m)`
 
 ### `shaders/legendreSynthesisDTheta.wgsl`
 
-* [ ] 输入 `a(m,l)`
-* [ ] 使用 `dP_lm_dtheta`
-* [ ] 输出 `dthetaFreq(j,m)`
+* [x] 输入 `a(m,l)`
+* [x] 使用 `dP_lm_dtheta`
+* [x] 输出 `dthetaFreq(j,m)`
 
 ### Legendre 测试
 
 * [ ] 单模 round-trip：`analysis(synthesis(a)) ≈ a`
 * [ ] `m=0` 轴对称模正确
-* [ ] `l<m` 始终为零
+* [x] `l<m` 始终为零
 * [ ] `dtheta` 与 CPU 参考一致
 * [ ] 多模叠加线性性成立
 * [ ] 极区不出现 NaN/Inf

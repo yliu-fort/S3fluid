@@ -8,11 +8,16 @@ export class SimulationPipeline {
 
     fftForwardPipeline: GPUComputePipeline;
     fftInversePipeline: GPUComputePipeline;
+    legendreAnalysisPipeline: GPUComputePipeline;
+    legendreSynthesisPipeline: GPUComputePipeline;
+    legendreSynthesisDThetaPipeline: GPUComputePipeline;
 
     paramsBuffer: GPUBuffer;
 
     fftForwardBindGroupLayout: GPUBindGroupLayout;
     fftInverseBindGroupLayout: GPUBindGroupLayout;
+    legendreAnalysisBindGroupLayout: GPUBindGroupLayout;
+    legendreSynthesisBindGroupLayout: GPUBindGroupLayout;
 
     constructor(device: GPUDevice, config: SimulationConfig, buffers: SimulationBuffers) {
         this.device = device;
@@ -53,9 +58,38 @@ export class SimulationPipeline {
                 { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } }
             ]
         });
+
+        // Legendre Analysis layout
+        this.legendreAnalysisBindGroupLayout = this.device.createBindGroupLayout({
+            label: "legendreAnalysisBindGroupLayout",
+            entries: [
+                { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+                { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+                { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+                { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+                { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } }
+            ]
+        });
+
+        // Legendre Synthesis layout
+        this.legendreSynthesisBindGroupLayout = this.device.createBindGroupLayout({
+            label: "legendreSynthesisBindGroupLayout",
+            entries: [
+                { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+                { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+                { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+                { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } }
+            ]
+        });
     }
 
-    async init(fftForwardCode: string, fftInverseCode: string) {
+    async init(
+        fftForwardCode: string,
+        fftInverseCode: string,
+        legendreAnalysisCode: string,
+        legendreSynthesisCode: string,
+        legendreSynthesisDThetaCode: string
+    ) {
         const fftForwardModule = this.device.createShaderModule({
             label: "fftForwardLon",
             code: fftForwardCode
@@ -84,6 +118,54 @@ export class SimulationPipeline {
             }),
             compute: {
                 module: fftInverseModule,
+                entryPoint: "main"
+            }
+        });
+
+        const legendreAnalysisModule = this.device.createShaderModule({
+            label: "legendreAnalysis",
+            code: legendreAnalysisCode
+        });
+
+        this.legendreAnalysisPipeline = await this.device.createComputePipelineAsync({
+            label: "legendreAnalysisPipeline",
+            layout: this.device.createPipelineLayout({
+                bindGroupLayouts: [this.legendreAnalysisBindGroupLayout]
+            }),
+            compute: {
+                module: legendreAnalysisModule,
+                entryPoint: "main"
+            }
+        });
+
+        const legendreSynthesisModule = this.device.createShaderModule({
+            label: "legendreSynthesis",
+            code: legendreSynthesisCode
+        });
+
+        this.legendreSynthesisPipeline = await this.device.createComputePipelineAsync({
+            label: "legendreSynthesisPipeline",
+            layout: this.device.createPipelineLayout({
+                bindGroupLayouts: [this.legendreSynthesisBindGroupLayout]
+            }),
+            compute: {
+                module: legendreSynthesisModule,
+                entryPoint: "main"
+            }
+        });
+
+        const legendreSynthesisDThetaModule = this.device.createShaderModule({
+            label: "legendreSynthesisDTheta",
+            code: legendreSynthesisDThetaCode
+        });
+
+        this.legendreSynthesisDThetaPipeline = await this.device.createComputePipelineAsync({
+            label: "legendreSynthesisDThetaPipeline",
+            layout: this.device.createPipelineLayout({
+                bindGroupLayouts: [this.legendreSynthesisBindGroupLayout]
+            }),
+            compute: {
+                module: legendreSynthesisDThetaModule,
                 entryPoint: "main"
             }
         });
@@ -120,5 +202,75 @@ export class SimulationPipeline {
         pass.setBindGroup(0, bindGroup);
         const workgroupCount = Math.ceil(this.config.nlat / 64);
         pass.dispatchWorkgroups(workgroupCount);
+    }
+
+    passLegendreAnalysis(pass: GPUComputePassEncoder, freqIn: GPUBuffer, wBuffer: GPUBuffer, PBuffer: GPUBuffer, aOut: GPUBuffer) {
+        const bindGroup = this.device.createBindGroup({
+            layout: this.legendreAnalysisBindGroupLayout,
+            entries: [
+                { binding: 0, resource: { buffer: freqIn } },
+                { binding: 1, resource: { buffer: wBuffer } },
+                { binding: 2, resource: { buffer: PBuffer } },
+                { binding: 3, resource: { buffer: aOut } },
+                { binding: 4, resource: { buffer: this.paramsBuffer } }
+            ]
+        });
+
+        pass.setPipeline(this.legendreAnalysisPipeline);
+        pass.setBindGroup(0, bindGroup);
+
+        const M = this.config.lmax + 1;
+        const L = this.config.lmax + 1;
+
+        const workgroupCountX = Math.ceil(M / 16);
+        const workgroupCountY = Math.ceil(L / 16);
+
+        pass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
+    }
+
+    passLegendreSynthesis(pass: GPUComputePassEncoder, aIn: GPUBuffer, PBuffer: GPUBuffer, freqOut: GPUBuffer) {
+        const bindGroup = this.device.createBindGroup({
+            layout: this.legendreSynthesisBindGroupLayout,
+            entries: [
+                { binding: 0, resource: { buffer: aIn } },
+                { binding: 1, resource: { buffer: PBuffer } },
+                { binding: 2, resource: { buffer: freqOut } },
+                { binding: 3, resource: { buffer: this.paramsBuffer } }
+            ]
+        });
+
+        pass.setPipeline(this.legendreSynthesisPipeline);
+        pass.setBindGroup(0, bindGroup);
+
+        const M = this.config.lmax + 1;
+        const nlat = this.config.nlat;
+
+        const workgroupCountX = Math.ceil(M / 16);
+        const workgroupCountY = Math.ceil(nlat / 16);
+
+        pass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
+    }
+
+    passLegendreSynthesisDTheta(pass: GPUComputePassEncoder, aIn: GPUBuffer, dPBuffer: GPUBuffer, freqOut: GPUBuffer) {
+        const bindGroup = this.device.createBindGroup({
+            layout: this.legendreSynthesisBindGroupLayout,
+            entries: [
+                { binding: 0, resource: { buffer: aIn } },
+                { binding: 1, resource: { buffer: dPBuffer } },
+                { binding: 2, resource: { buffer: freqOut } },
+                { binding: 3, resource: { buffer: this.paramsBuffer } }
+            ]
+        });
+
+        pass.setPipeline(this.legendreSynthesisDThetaPipeline);
+        pass.setBindGroup(0, bindGroup);
+
+        const M = this.config.lmax + 1;
+        const nlat = this.config.nlat;
+
+        const workgroupCountX = Math.ceil(M / 16);
+        const workgroupCountY = Math.ceil(nlat / 16);
+
+        pass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
     }
 }
