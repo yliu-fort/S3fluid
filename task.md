@@ -208,6 +208,8 @@ src/
 * [ ] GPU/CPU FFT 逐频对照
 * [ ] 实场重建后虚部误差在阈值内
 
+> Note: Node.js/Jest tests for WebGPU are restricted to mocking `GPUDevice` to test pipeline/buffer initialization logic. Mathematical validations require a browser environment (e.g. Playwright) which hasn't been implemented yet.
+
 ---
 
 ## 5. Phase D：Legendre 变换
