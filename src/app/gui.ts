@@ -35,7 +35,7 @@ export class AppGUI {
             seed: SOLVER_CONFIG.seed,
             amplitude: SOLVER_CONFIG.amplitude,
             stepsPerFrame: SOLVER_CONFIG.stepsPerFrame,
-            displayScale: 1.0,
+            displayScale: 0.05,
             showEnergy: true,
             pause: false,
             reset: onReset
@@ -56,7 +56,7 @@ export class AppGUI {
         simFolder.add(this.state, 'stepsPerFrame', 1, 50, 1).onChange((v: number) => SOLVER_CONFIG.stepsPerFrame = v);
 
         const viewFolder = this.gui.addFolder('Visualization');
-        viewFolder.add(this.state, 'displayScale', 0.1, 10.0);
+        viewFolder.add(this.state, 'displayScale', 0.01, 2.0);
         viewFolder.add(this.state, 'showEnergy');
 
         const ctrlFolder = this.gui.addFolder('Controls');

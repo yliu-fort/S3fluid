@@ -1,6 +1,6 @@
 import { SOLVER_CONFIG } from './config';
-import { SPECTRAL_COEFFS_F32_COUNT, GRID_POINTS_F32_COUNT } from './layout';
-import { PrecomputedData } from './precompute';
+import { getSpectralCoeffsF32Count, getGridPointsF32Count } from './layout';
+import type { PrecomputedData } from './precompute';
 
 export class SolverBuffers {
     zetaLM_A!: GPUBuffer;
@@ -12,6 +12,8 @@ export class SolverBuffers {
     k3!: GPUBuffer;
     k4!: GPUBuffer;
     tmpLM!: GPUBuffer;
+    tmpLM2!: GPUBuffer;
+    zTemp!: GPUBuffer;
     freqBuffer!: GPUBuffer;
 
     zetaGrid!: GPUBuffer;
@@ -58,8 +60,8 @@ export class SolverBuffers {
     }
 
     init(precomputedData: PrecomputedData) {
-        const spectralCount = SPECTRAL_COEFFS_F32_COUNT;
-        const gridCount = GRID_POINTS_F32_COUNT;
+        const spectralCount = getSpectralCoeffsF32Count();
+        const gridCount = getGridPointsF32Count();
 
         this.zetaLM_A = this.createStorageBuffer(spectralCount, "zetaLM_A");
         this.zetaLM_B = this.createStorageBuffer(spectralCount, "zetaLM_B");
@@ -70,6 +72,8 @@ export class SolverBuffers {
         this.k3 = this.createStorageBuffer(spectralCount, "k3");
         this.k4 = this.createStorageBuffer(spectralCount, "k4");
         this.tmpLM = this.createStorageBuffer(spectralCount, "tmpLM");
+        this.tmpLM2 = this.createStorageBuffer(spectralCount, "tmpLM2");
+        this.zTemp = this.createStorageBuffer(spectralCount, "zTemp");
         this.freqBuffer = this.createStorageBuffer(SOLVER_CONFIG.nlat * (SOLVER_CONFIG.lmax + 1) * 2, "freqBuffer");
 
         this.zetaGrid = this.createStorageBuffer(gridCount, "zetaGrid");

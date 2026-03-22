@@ -8,5 +8,5 @@ export const SOLVER_CONFIG = {
     filterOrder: 8,
     stepsPerFrame: 10,
     seed: 42,
-    amplitude: 0.1
+    amplitude: 1.0
 };

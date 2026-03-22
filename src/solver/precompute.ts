@@ -2,7 +2,7 @@ import { SOLVER_CONFIG } from './config';
 import { getMIndex, isLValid } from './layout';
 import { leggauss, lpmv, _norm_matrix } from '../../tests/cpu-reference/shtReference';
 
-export interface PrecomputedData {
+export type PrecomputedData = {
     mu: Float32Array;
     w: Float32Array;
     theta: Float32Array;
