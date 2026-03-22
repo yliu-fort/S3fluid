@@ -185,19 +185,19 @@ src/
 
 ### `shaders/fftForwardLon.wgsl`
 
-* [ ] 输入 `grid(j,k)`
-* [ ] 输出 `F(j,m)`
+* [x] 输入 `grid(j,k)`
+* [x] 输出 `F(j,m)`
 
 ### `shaders/fftInverseLon.wgsl`
 
-* [ ] 输入 `F(j,m)`
-* [ ] 输出 `grid(j,k)`
+* [x] 输入 `F(j,m)`
+* [x] 输出 `grid(j,k)`
 
 ### `src/solver/pipeline.ts`
 
-* [ ] 注册 forward FFT pass
-* [ ] 注册 inverse FFT pass
-* [ ] 把 FFT 从 Legendre 管线中独立出来
+* [x] 注册 forward FFT pass
+* [x] 注册 inverse FFT pass
+* [x] 把 FFT 从 Legendre 管线中独立出来
 
 ### FFT 测试
 
