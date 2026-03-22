@@ -32,6 +32,8 @@ export class SimulationBuffers {
     dP_lm_dtheta!: GPUBuffer;
     lapEigs!: GPUBuffer;
     specFilter!: GPUBuffer;
+    initSlope!: GPUBuffer;
+    sinTheta!: GPUBuffer;
 
     constructor(device: GPUDevice, config: SimulationConfig) {
         this.device = device;

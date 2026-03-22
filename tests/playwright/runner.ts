@@ -14,6 +14,15 @@ import mulIMSrc from '../../src/shaders/mulIM.wgsl?raw';
 import applyLaplacianSrc from '../../src/shaders/applyLaplacian.wgsl?raw';
 import invertLaplacianSrc from '../../src/shaders/invertLaplacian.wgsl?raw';
 import filterSpectrumSrc from '../../src/shaders/filterSpectrum.wgsl?raw';
+import initRandomSrc from '../../src/shaders/initRandom.wgsl?raw';
+import velocityFromPsiSrc from '../../src/shaders/velocityFromPsi.wgsl?raw';
+import advectGridSrc from '../../src/shaders/advectGrid.wgsl?raw';
+import rhsComposeSrc from '../../src/shaders/rhsCompose.wgsl?raw';
+import rk4StageSrc from '../../src/shaders/rk4Stage.wgsl?raw';
+import rk4CombineSrc from '../../src/shaders/rk4Combine.wgsl?raw';
+import energyIntegrandSrc from '../../src/shaders/energyIntegrand.wgsl?raw';
+import reduceSumSrc from '../../src/shaders/reduceSum.wgsl?raw';
+
 
 class TestRunner {
     device: GPUDevice | null = null;
@@ -44,7 +53,15 @@ class TestRunner {
             mulIMSrc,
             applyLaplacianSrc,
             invertLaplacianSrc,
-            filterSpectrumSrc
+            filterSpectrumSrc,
+            initRandomSrc,
+            velocityFromPsiSrc,
+            advectGridSrc,
+            rhsComposeSrc,
+            rk4StageSrc,
+            rk4CombineSrc,
+            energyIntegrandSrc,
+            reduceSumSrc
         );
         (window as any).TestRunnerReady = true;
     }
@@ -73,7 +90,7 @@ class TestRunner {
         const copyArrayBuffer = readBuffer.getMappedRange();
 
         const result = new Float32Array(length);
-        result.set(new Float32Array(copyArrayBuffer).slice(0, length));
+        result.set(new Float32Array(copyArrayBuffer as ArrayBuffer).slice(0, length));
 
         readBuffer.unmap();
         readBuffer.destroy();

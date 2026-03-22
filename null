@@ -1,0 +1,307 @@
+
+> app@1.0.0 test
+> npx jest tests/solver/ tests/cpu-reference/ && xvfb-run npx playwright test tests/playwright/
+
+PASS tests/cpu-reference/modelReference.test.ts
+PASS tests/cpu-reference/shtReference.test.ts
+PASS tests/solver/layout.test.ts
+PASS tests/solver/precompute.test.ts
+PASS tests/solver/buffers.test.ts
+
+Test Suites: 5 passed, 5 total
+Tests:       11 passed, 11 total
+Snapshots:   0 total
+Time:        3.584 s
+Ran all test suites matching /tests\/solver\/|tests\/cpu-reference\//i.
+
+Running 11 tests using 2 workers
+
+  ✘   1 tests/playwright/shaders/fft.spec.ts:12:9 › WebGPU FFT Functionality › Forward FFT of constant field has only m=0 component (30.1s)
+  ✘   2 tests/playwright/shaders/legendre.spec.ts:13:9 › WebGPU Legendre Functionality › Single mode round trip (analysis(synthesis(a)) ≈ a) (30.1s)
+  ✘   3 tests/playwright/shaders/fft.spec.ts:50:9 › WebGPU FFT Functionality › Forward FFT of pure cosine field has only m component (30.1s)
+  ✘   4 tests/playwright/shaders/legendre.spec.ts:64:9 › WebGPU Legendre Functionality › m=0 axis-symmetric modes verify correctly (30.1s)
+  ✘   5 tests/playwright/shaders/fft.spec.ts:93:9 › WebGPU FFT Functionality › iFFT(FFT(x)) is approximate identity (30.1s)
+  ✘   6 tests/playwright/shaders/legendre.spec.ts:99:9 › WebGPU Legendre Functionality › Zeros in l < m regions (30.1s)
+  ✘   7 tests/playwright/shaders/spectralOperators.spec.ts:11:9 › WebGPU Spectral Operators Functionality › m=0 after mulIM is all zero (30.1s)
+  ✘   8 tests/playwright/shaders/spectralOperators.spec.ts:41:9 › WebGPU Spectral Operators Functionality › applyLaplacian accurately multiplies by -l(l+1) (30.1s)
+  ✘   9 tests/playwright/shaders/spectralOperators.spec.ts:84:9 › WebGPU Spectral Operators Functionality › invertLaplacian(applyLaplacian(a)) ≈ a (ignoring l=0) (30.1s)
+  ✘  10 tests/playwright/shaders/spectralOperators.spec.ts:145:9 › WebGPU Spectral Operators Functionality › filterSpectrum does not change l=0 (30.1s)
+  ✘  11 tests/playwright/shaders/spectralOperators.spec.ts:169:9 › WebGPU Spectral Operators Functionality › High-frequency modes are reduced by filterSpectrum (30.1s)
+
+
+  1) tests/playwright/shaders/fft.spec.ts:12:9 › WebGPU FFT Functionality › Forward FFT of constant field has only m=0 component
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+      4 |
+      5 | test.describe('WebGPU FFT Functionality', () => {
+    > 6 |     test.beforeEach(async ({ page }) => {
+        |          ^
+      7 |         page.on('pageerror', error => console.error(error));
+      8 |         await page.goto('/');
+      9 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+        at /app/tests/playwright/shaders/fft.spec.ts:6:10
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+       7 |         page.on('pageerror', error => console.error(error));
+       8 |         await page.goto('/');
+    >  9 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+         |                    ^
+      10 |     });
+      11 |
+      12 |     test('Forward FFT of constant field has only m=0 component', async ({ page }) => {
+        at /app/tests/playwright/shaders/fft.spec.ts:9:20
+
+  2) tests/playwright/shaders/fft.spec.ts:50:9 › WebGPU FFT Functionality › Forward FFT of pure cosine field has only m component
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+      4 |
+      5 | test.describe('WebGPU FFT Functionality', () => {
+    > 6 |     test.beforeEach(async ({ page }) => {
+        |          ^
+      7 |         page.on('pageerror', error => console.error(error));
+      8 |         await page.goto('/');
+      9 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+        at /app/tests/playwright/shaders/fft.spec.ts:6:10
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+       7 |         page.on('pageerror', error => console.error(error));
+       8 |         await page.goto('/');
+    >  9 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+         |                    ^
+      10 |     });
+      11 |
+      12 |     test('Forward FFT of constant field has only m=0 component', async ({ page }) => {
+        at /app/tests/playwright/shaders/fft.spec.ts:9:20
+
+  3) tests/playwright/shaders/fft.spec.ts:93:9 › WebGPU FFT Functionality › iFFT(FFT(x)) is approximate identity
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+      4 |
+      5 | test.describe('WebGPU FFT Functionality', () => {
+    > 6 |     test.beforeEach(async ({ page }) => {
+        |          ^
+      7 |         page.on('pageerror', error => console.error(error));
+      8 |         await page.goto('/');
+      9 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+        at /app/tests/playwright/shaders/fft.spec.ts:6:10
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+       7 |         page.on('pageerror', error => console.error(error));
+       8 |         await page.goto('/');
+    >  9 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+         |                    ^
+      10 |     });
+      11 |
+      12 |     test('Forward FFT of constant field has only m=0 component', async ({ page }) => {
+        at /app/tests/playwright/shaders/fft.spec.ts:9:20
+
+  4) tests/playwright/shaders/legendre.spec.ts:13:9 › WebGPU Legendre Functionality › Single mode round trip (analysis(synthesis(a)) ≈ a)
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+       5 |
+       6 | test.describe('WebGPU Legendre Functionality', () => {
+    >  7 |     test.beforeEach(async ({ page }) => {
+         |          ^
+       8 |         page.on('pageerror', error => console.error(error));
+       9 |         await page.goto('/');
+      10 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+        at /app/tests/playwright/shaders/legendre.spec.ts:7:10
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+       8 |         page.on('pageerror', error => console.error(error));
+       9 |         await page.goto('/');
+    > 10 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+         |                    ^
+      11 |     });
+      12 |
+      13 |     test('Single mode round trip (analysis(synthesis(a)) ≈ a)', async ({ page }) => {
+        at /app/tests/playwright/shaders/legendre.spec.ts:10:20
+
+  5) tests/playwright/shaders/legendre.spec.ts:64:9 › WebGPU Legendre Functionality › m=0 axis-symmetric modes verify correctly
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+       5 |
+       6 | test.describe('WebGPU Legendre Functionality', () => {
+    >  7 |     test.beforeEach(async ({ page }) => {
+         |          ^
+       8 |         page.on('pageerror', error => console.error(error));
+       9 |         await page.goto('/');
+      10 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+        at /app/tests/playwright/shaders/legendre.spec.ts:7:10
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+       8 |         page.on('pageerror', error => console.error(error));
+       9 |         await page.goto('/');
+    > 10 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+         |                    ^
+      11 |     });
+      12 |
+      13 |     test('Single mode round trip (analysis(synthesis(a)) ≈ a)', async ({ page }) => {
+        at /app/tests/playwright/shaders/legendre.spec.ts:10:20
+
+  6) tests/playwright/shaders/legendre.spec.ts:99:9 › WebGPU Legendre Functionality › Zeros in l < m regions
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+       5 |
+       6 | test.describe('WebGPU Legendre Functionality', () => {
+    >  7 |     test.beforeEach(async ({ page }) => {
+         |          ^
+       8 |         page.on('pageerror', error => console.error(error));
+       9 |         await page.goto('/');
+      10 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+        at /app/tests/playwright/shaders/legendre.spec.ts:7:10
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+       8 |         page.on('pageerror', error => console.error(error));
+       9 |         await page.goto('/');
+    > 10 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+         |                    ^
+      11 |     });
+      12 |
+      13 |     test('Single mode round trip (analysis(synthesis(a)) ≈ a)', async ({ page }) => {
+        at /app/tests/playwright/shaders/legendre.spec.ts:10:20
+
+  7) tests/playwright/shaders/spectralOperators.spec.ts:11:9 › WebGPU Spectral Operators Functionality › m=0 after mulIM is all zero
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+      3 |
+      4 | test.describe('WebGPU Spectral Operators Functionality', () => {
+    > 5 |     test.beforeEach(async ({ page }) => {
+        |          ^
+      6 |         page.on('pageerror', error => console.error(error));
+      7 |         await page.goto('/');
+      8 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+        at /app/tests/playwright/shaders/spectralOperators.spec.ts:5:10
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+       6 |         page.on('pageerror', error => console.error(error));
+       7 |         await page.goto('/');
+    >  8 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+         |                    ^
+       9 |     });
+      10 |
+      11 |     test('m=0 after mulIM is all zero', async ({ page }) => {
+        at /app/tests/playwright/shaders/spectralOperators.spec.ts:8:20
+
+  8) tests/playwright/shaders/spectralOperators.spec.ts:41:9 › WebGPU Spectral Operators Functionality › applyLaplacian accurately multiplies by -l(l+1)
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+      3 |
+      4 | test.describe('WebGPU Spectral Operators Functionality', () => {
+    > 5 |     test.beforeEach(async ({ page }) => {
+        |          ^
+      6 |         page.on('pageerror', error => console.error(error));
+      7 |         await page.goto('/');
+      8 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+        at /app/tests/playwright/shaders/spectralOperators.spec.ts:5:10
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+       6 |         page.on('pageerror', error => console.error(error));
+       7 |         await page.goto('/');
+    >  8 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+         |                    ^
+       9 |     });
+      10 |
+      11 |     test('m=0 after mulIM is all zero', async ({ page }) => {
+        at /app/tests/playwright/shaders/spectralOperators.spec.ts:8:20
+
+  9) tests/playwright/shaders/spectralOperators.spec.ts:84:9 › WebGPU Spectral Operators Functionality › invertLaplacian(applyLaplacian(a)) ≈ a (ignoring l=0)
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+      3 |
+      4 | test.describe('WebGPU Spectral Operators Functionality', () => {
+    > 5 |     test.beforeEach(async ({ page }) => {
+        |          ^
+      6 |         page.on('pageerror', error => console.error(error));
+      7 |         await page.goto('/');
+      8 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+        at /app/tests/playwright/shaders/spectralOperators.spec.ts:5:10
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+       6 |         page.on('pageerror', error => console.error(error));
+       7 |         await page.goto('/');
+    >  8 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+         |                    ^
+       9 |     });
+      10 |
+      11 |     test('m=0 after mulIM is all zero', async ({ page }) => {
+        at /app/tests/playwright/shaders/spectralOperators.spec.ts:8:20
+
+  10) tests/playwright/shaders/spectralOperators.spec.ts:145:9 › WebGPU Spectral Operators Functionality › filterSpectrum does not change l=0
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+      3 |
+      4 | test.describe('WebGPU Spectral Operators Functionality', () => {
+    > 5 |     test.beforeEach(async ({ page }) => {
+        |          ^
+      6 |         page.on('pageerror', error => console.error(error));
+      7 |         await page.goto('/');
+      8 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+        at /app/tests/playwright/shaders/spectralOperators.spec.ts:5:10
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+       6 |         page.on('pageerror', error => console.error(error));
+       7 |         await page.goto('/');
+    >  8 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+         |                    ^
+       9 |     });
+      10 |
+      11 |     test('m=0 after mulIM is all zero', async ({ page }) => {
+        at /app/tests/playwright/shaders/spectralOperators.spec.ts:8:20
+
+  11) tests/playwright/shaders/spectralOperators.spec.ts:169:9 › WebGPU Spectral Operators Functionality › High-frequency modes are reduced by filterSpectrum
+
+    [31mTest timeout of 30000ms exceeded while running "beforeEach" hook.[39m
+
+      3 |
+      4 | test.describe('WebGPU Spectral Operators Functionality', () => {
+    > 5 |     test.beforeEach(async ({ page }) => {
+        |          ^
+      6 |         page.on('pageerror', error => console.error(error));
+      7 |         await page.goto('/');
+      8 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+        at /app/tests/playwright/shaders/spectralOperators.spec.ts:5:10
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+       6 |         page.on('pageerror', error => console.error(error));
+       7 |         await page.goto('/');
+    >  8 |         await page.waitForFunction(() => (window as any).TestRunnerReady === true);
+         |                    ^
+       9 |     });
+      10 |
+      11 |     test('m=0 after mulIM is all zero', async ({ page }) => {
+        at /app/tests/playwright/shaders/spectralOperators.spec.ts:8:20
+
+  11 failed
+    tests/playwright/shaders/fft.spec.ts:12:9 › WebGPU FFT Functionality › Forward FFT of constant field has only m=0 component
+    tests/playwright/shaders/fft.spec.ts:50:9 › WebGPU FFT Functionality › Forward FFT of pure cosine field has only m component
+    tests/playwright/shaders/fft.spec.ts:93:9 › WebGPU FFT Functionality › iFFT(FFT(x)) is approximate identity
+    tests/playwright/shaders/legendre.spec.ts:13:9 › WebGPU Legendre Functionality › Single mode round trip (analysis(synthesis(a)) ≈ a)
+    tests/playwright/shaders/legendre.spec.ts:64:9 › WebGPU Legendre Functionality › m=0 axis-symmetric modes verify correctly
+    tests/playwright/shaders/legendre.spec.ts:99:9 › WebGPU Legendre Functionality › Zeros in l < m regions
+    tests/playwright/shaders/spectralOperators.spec.ts:11:9 › WebGPU Spectral Operators Functionality › m=0 after mulIM is all zero
+    tests/playwright/shaders/spectralOperators.spec.ts:41:9 › WebGPU Spectral Operators Functionality › applyLaplacian accurately multiplies by -l(l+1)
+    tests/playwright/shaders/spectralOperators.spec.ts:84:9 › WebGPU Spectral Operators Functionality › invertLaplacian(applyLaplacian(a)) ≈ a (ignoring l=0)
+    tests/playwright/shaders/spectralOperators.spec.ts:145:9 › WebGPU Spectral Operators Functionality › filterSpectrum does not change l=0
+    tests/playwright/shaders/spectralOperators.spec.ts:169:9 › WebGPU Spectral Operators Functionality › High-frequency modes are reduced by filterSpectrum
