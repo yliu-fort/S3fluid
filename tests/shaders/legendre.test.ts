@@ -66,7 +66,7 @@ class MockGPUDevice {
     }
 }
 
-describe("SimulationPipeline FFT passes", () => {
+describe("SimulationPipeline Legendre passes", () => {
     let device: GPUDevice;
     let buffers: SimulationBuffers;
     let pipeline: SimulationPipeline;
@@ -101,15 +101,16 @@ describe("SimulationPipeline FFT passes", () => {
     });
 
     test("Initializes pipelines", async () => {
-        const dummyCode = "@compute @workgroup_size(64) fn main() {}";
+        const dummyCode = "@compute @workgroup_size(16, 16) fn main() {}";
         await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
 
-        expect(pipeline.fftForwardPipeline).toBeDefined();
-        expect(pipeline.fftInversePipeline).toBeDefined();
+        expect(pipeline.legendreAnalysisPipeline).toBeDefined();
+        expect(pipeline.legendreSynthesisPipeline).toBeDefined();
+        expect(pipeline.legendreSynthesisDThetaPipeline).toBeDefined();
     });
 
-    test("Dispatches FFT Forward pass", async () => {
-        const dummyCode = "@compute @workgroup_size(64) fn main() {}";
+    test("Dispatches Legendre Analysis pass", async () => {
+        const dummyCode = "@compute @workgroup_size(16, 16) fn main() {}";
         await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
 
         const mockPass = {
@@ -118,15 +119,19 @@ describe("SimulationPipeline FFT passes", () => {
             dispatchWorkgroups: jest.fn()
         } as unknown as GPUComputePassEncoder;
 
-        pipeline.passFFTForward(mockPass, buffers.zetaGrid, buffers.tmpLM);
+        const dummyBuffer = device.createBuffer({ size: 4, usage: 0 });
 
-        expect(mockPass.setPipeline).toHaveBeenCalledWith(pipeline.fftForwardPipeline);
+        pipeline.passLegendreAnalysis(mockPass, dummyBuffer, dummyBuffer, dummyBuffer, dummyBuffer);
+
+        expect(mockPass.setPipeline).toHaveBeenCalledWith(pipeline.legendreAnalysisPipeline);
         expect(mockPass.setBindGroup).toHaveBeenCalled();
-        expect(mockPass.dispatchWorkgroups).toHaveBeenCalledWith(Math.ceil(defaultConfig.nlat / 64));
+        const M = defaultConfig.lmax + 1;
+        const L = defaultConfig.lmax + 1;
+        expect(mockPass.dispatchWorkgroups).toHaveBeenCalledWith(Math.ceil(M / 16), Math.ceil(L / 16));
     });
 
-    test("Dispatches FFT Inverse pass", async () => {
-        const dummyCode = "@compute @workgroup_size(64) fn main() {}";
+    test("Dispatches Legendre Synthesis pass", async () => {
+        const dummyCode = "@compute @workgroup_size(16, 16) fn main() {}";
         await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
 
         const mockPass = {
@@ -135,10 +140,35 @@ describe("SimulationPipeline FFT passes", () => {
             dispatchWorkgroups: jest.fn()
         } as unknown as GPUComputePassEncoder;
 
-        pipeline.passFFTInverse(mockPass, buffers.tmpLM, buffers.zetaGrid);
+        const dummyBuffer = device.createBuffer({ size: 4, usage: 0 });
 
-        expect(mockPass.setPipeline).toHaveBeenCalledWith(pipeline.fftInversePipeline);
+        pipeline.passLegendreSynthesis(mockPass, dummyBuffer, dummyBuffer, dummyBuffer);
+
+        expect(mockPass.setPipeline).toHaveBeenCalledWith(pipeline.legendreSynthesisPipeline);
         expect(mockPass.setBindGroup).toHaveBeenCalled();
-        expect(mockPass.dispatchWorkgroups).toHaveBeenCalledWith(Math.ceil(defaultConfig.nlat / 64));
+        const nlat = defaultConfig.nlat;
+        const M = defaultConfig.lmax + 1;
+        expect(mockPass.dispatchWorkgroups).toHaveBeenCalledWith(Math.ceil(nlat / 16), Math.ceil(M / 16));
+    });
+
+    test("Dispatches Legendre Synthesis DTheta pass", async () => {
+        const dummyCode = "@compute @workgroup_size(16, 16) fn main() {}";
+        await pipeline.init(dummyCode, dummyCode, dummyCode, dummyCode, dummyCode);
+
+        const mockPass = {
+            setPipeline: jest.fn(),
+            setBindGroup: jest.fn(),
+            dispatchWorkgroups: jest.fn()
+        } as unknown as GPUComputePassEncoder;
+
+        const dummyBuffer = device.createBuffer({ size: 4, usage: 0 });
+
+        pipeline.passLegendreSynthesisDTheta(mockPass, dummyBuffer, dummyBuffer, dummyBuffer);
+
+        expect(mockPass.setPipeline).toHaveBeenCalledWith(pipeline.legendreSynthesisDThetaPipeline);
+        expect(mockPass.setBindGroup).toHaveBeenCalled();
+        const nlat = defaultConfig.nlat;
+        const M = defaultConfig.lmax + 1;
+        expect(mockPass.dispatchWorkgroups).toHaveBeenCalledWith(Math.ceil(nlat / 16), Math.ceil(M / 16));
     });
 });
