@@ -8,7 +8,7 @@ import scalarColorFragCode from '../shaders/scalarColor.frag.wgsl?raw';
 export class SphereView {
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
-    renderer: THREE.WebGLRenderer;
+    renderer: THREE.WebGLRenderer & { renderAsync: (scene: THREE.Scene, camera: THREE.Camera) => Promise<void> };
     controls: OrbitControls;
 
     mesh: THREE.Mesh;
@@ -26,7 +26,7 @@ export class SphereView {
         this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
         this.camera.position.z = 3;
 
-        this.renderer = new THREE.WebGPURenderer({ canvas, antialias: true });
+        this.renderer = new (THREE as any).WebGPURenderer({ canvas, antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
 
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);

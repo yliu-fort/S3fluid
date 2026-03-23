@@ -16,7 +16,26 @@ export class SimulationPipeline {
     invertLaplacianPipeline: GPUComputePipeline;
     filterSpectrumPipeline: GPUComputePipeline;
 
+    initRandomBindGroupLayout: GPUBindGroupLayout;
+    velocityFromPsiBindGroupLayout: GPUBindGroupLayout;
+    advectGridBindGroupLayout: GPUBindGroupLayout;
+    rhsComposeBindGroupLayout: GPUBindGroupLayout;
+    rk4StageBindGroupLayout: GPUBindGroupLayout;
+    rk4CombineBindGroupLayout: GPUBindGroupLayout;
+    energyIntegrandBindGroupLayout: GPUBindGroupLayout;
+    reduceSumBindGroupLayout: GPUBindGroupLayout;
+
+    initRandomPipeline: GPUComputePipeline;
+    velocityFromPsiPipeline: GPUComputePipeline;
+    advectGridPipeline: GPUComputePipeline;
+    rhsComposePipeline: GPUComputePipeline;
+    rk4StagePipeline: GPUComputePipeline;
+    rk4CombinePipeline: GPUComputePipeline;
+    energyIntegrandPipeline: GPUComputePipeline;
+    reduceSumPipeline: GPUComputePipeline;
+
     paramsBuffer: GPUBuffer;
+    rk4CoeffBuffer: GPUBuffer;
 
     fftForwardBindGroupLayout: GPUBindGroupLayout;
     fftInverseBindGroupLayout: GPUBindGroupLayout;
@@ -34,11 +53,8 @@ export class SimulationPipeline {
         this.buffers = buffers;
 
         // Create params buffer
-        this.paramsBuffer = this.device.createBuffer({
-            label: "pipeline_params",
-            size: 16, // 4 u32s: nlat, nlon, M, L
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
+        this.paramsBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.rk4CoeffBuffer = this.device.createBuffer({ size: 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
         const paramsData = new Uint32Array([
             this.config.nlat,
