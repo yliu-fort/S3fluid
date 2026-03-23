@@ -1,7 +1,5 @@
-
-import { UserConfig } from 'vite';
-
-const config: UserConfig = {
+/** @type {import('vite').UserConfig} */
+const config = {
   root: 'tests/playwright',
   server: {
     host: '127.0.0.1',

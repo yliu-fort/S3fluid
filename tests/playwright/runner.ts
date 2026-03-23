@@ -68,7 +68,7 @@ class TestRunner {
 
     uploadFloat32Array(buffer: GPUBuffer, data: Float32Array) {
         if (!this.device) return;
-        this.device.queue.writeBuffer(buffer, 0, data);
+        this.device.queue.writeBuffer(buffer, 0, data.buffer, data.byteOffset, data.byteLength);
     }
 
     async readFloat32Array(buffer: GPUBuffer, length: number): Promise<Float32Array> {
@@ -90,7 +90,7 @@ class TestRunner {
         const copyArrayBuffer = readBuffer.getMappedRange();
 
         const result = new Float32Array(length);
-        result.set(new Float32Array(copyArrayBuffer as ArrayBuffer).slice(0, length));
+        result.set(new Float32Array(copyArrayBuffer as any).slice(0, length));
 
         readBuffer.unmap();
         readBuffer.destroy();
