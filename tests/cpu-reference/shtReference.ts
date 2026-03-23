@@ -112,8 +112,8 @@ function rfft(realInput: Float64Array, N: number, M: number): { real: Float64Arr
         let sumIm = 0;
         for (let n = 0; n < N; n++) {
             let angle = -2 * Math.PI * m * n / N;
-            sumRe += realInput[n] * Math.cos(angle);
-            sumIm += realInput[n] * Math.sin(angle);
+                sumRe += (realInput[n] || 0.0) * Math.cos(angle);
+                sumIm += (realInput[n] || 0.0) * Math.sin(angle);
         }
         real[m] = sumRe;
         imag[m] = sumIm;
@@ -124,11 +124,11 @@ function rfft(realInput: Float64Array, N: number, M: number): { real: Float64Arr
 function irfft(realFreq: Float64Array, imagFreq: Float64Array, N: number, M: number): Float64Array {
     const out = new Float64Array(N);
     for (let n = 0; n < N; n++) {
-        let sum = realFreq[0]; // m = 0 term
+            let sum = realFreq[0] || 0.0; // m = 0 term
         for (let m = 1; m < M; m++) {
             let angle = 2 * Math.PI * m * n / N;
             // Since input was real, we take 2 * Real(X[m] * exp(i * angle))
-            sum += 2 * (realFreq[m] * Math.cos(angle) - imagFreq[m] * Math.sin(angle));
+                sum += 2 * ((realFreq[m] || 0.0) * Math.cos(angle) - (imagFreq[m] || 0.0) * Math.sin(angle));
         }
         out[n] = sum / N;
     }
@@ -244,11 +244,13 @@ export class SphericalHarmonicTransform {
 
         for (let j = 0; j < this.J; j++) {
             let row = new Float64Array(this.nlon);
-            for (let k = 0; k < this.nlon; k++) row[k] = field[j * this.nlon + k];
+            for (let k = 0; k < this.nlon; k++) {
+                row[k] = field[j * this.nlon + k] || 0.0;
+            }
             let row_fft = rfft(row, this.nlon, this.M);
             for (let m = 0; m < this.M; m++) {
-                F_re[j * this.M + m] = row_fft.real[m];
-                F_im[j * this.M + m] = row_fft.imag[m];
+                F_re[j * this.M + m] = row_fft.real[m] || 0.0;
+                F_im[j * this.M + m] = row_fft.imag[m] || 0.0;
             }
         }
 
@@ -259,9 +261,9 @@ export class SphericalHarmonicTransform {
                     let sum_re = 0;
                     let sum_im = 0;
                     for (let j = 0; j < this.J; j++) {
-                        let p_w = this.Pw[j * (this.M * this.L) + m * this.L + l];
-                        sum_re += p_w * F_re[j * this.M + m];
-                        sum_im += p_w * F_im[j * this.M + m];
+                        let p_w = this.Pw[j * (this.M * this.L) + m * this.L + l] || 0.0;
+                        sum_re += p_w * (F_re[j * this.M + m] || 0.0);
+                        sum_im += p_w * (F_im[j * this.M + m] || 0.0);
                     }
                     out_re[ml_idx] = sum_re * (2.0 * Math.PI / this.nlon);
                     out_im[ml_idx] = sum_im * (2.0 * Math.PI / this.nlon);
@@ -283,9 +285,9 @@ export class SphericalHarmonicTransform {
                 for (let l = 0; l < this.L; l++) {
                     let ml_idx = m * this.L + l;
                     if (this.valid[ml_idx]) {
-                        let p_val = this.P[j * (this.M * this.L) + m * this.L + l];
-                        sum_re += p_val * a_re[ml_idx];
-                        sum_im += p_val * a_im[ml_idx];
+                        let p_val = this.P[j * (this.M * this.L) + m * this.L + l] || 0.0;
+                        sum_re += p_val * (a_re[ml_idx] || 0.0);
+                        sum_im += p_val * (a_im[ml_idx] || 0.0);
                     }
                 }
                 freq_re[j * this.M + m] = sum_re * this.nlon;
@@ -303,7 +305,7 @@ export class SphericalHarmonicTransform {
             }
             let row_ifft = irfft(row_freq_re, row_freq_im, this.nlon, this.M);
             for (let k = 0; k < this.nlon; k++) {
-                field[j * this.nlon + k] = row_ifft[k];
+                field[j * this.nlon + k] = row_ifft[k] || 0.0;
             }
         }
         return field;
@@ -318,8 +320,8 @@ export class SphericalHarmonicTransform {
                 let idx = m * this.L + l;
                 if (this.valid[idx]) {
                     // a * (i*m) = (a_re + i*a_im) * i*m = -a_im*m + i*a_re*m
-                    out_re[idx] = -a_im[idx] * m;
-                    out_im[idx] = a_re[idx] * m;
+                    out_re[idx] = -(a_im[idx] || 0.0) * m;
+                    out_im[idx] = (a_re[idx] || 0.0) * m;
                 }
             }
         }
@@ -337,9 +339,9 @@ export class SphericalHarmonicTransform {
                 for (let l = 0; l < this.L; l++) {
                     let ml_idx = m * this.L + l;
                     if (this.valid[ml_idx]) {
-                        let dp_val = this.dP[j * (this.M * this.L) + m * this.L + l];
-                        sum_re += dp_val * a_re[ml_idx];
-                        sum_im += dp_val * a_im[ml_idx];
+                        let dp_val = this.dP[j * (this.M * this.L) + m * this.L + l] || 0.0;
+                        sum_re += dp_val * (a_re[ml_idx] || 0.0);
+                        sum_im += dp_val * (a_im[ml_idx] || 0.0);
                     }
                 }
                 freq_re[j * this.M + m] = sum_re * this.nlon;
@@ -357,7 +359,7 @@ export class SphericalHarmonicTransform {
             }
             let row_ifft = irfft(row_freq_re, row_freq_im, this.nlon, this.M);
             for (let k = 0; k < this.nlon; k++) {
-                field[j * this.nlon + k] = row_ifft[k];
+                field[j * this.nlon + k] = row_ifft[k] || 0.0;
             }
         }
         return field;
@@ -368,8 +370,8 @@ export class SphericalHarmonicTransform {
         const out_im = new Float64Array(this.M * this.L);
         for (let i = 0; i < this.M * this.L; i++) {
             if (this.valid[i]) {
-                out_re[i] = a_re[i] * this.lap[i];
-                out_im[i] = a_im[i] * this.lap[i];
+                out_re[i] = (a_re[i] || 0.0) * (this.lap[i] || 0.0);
+                out_im[i] = (a_im[i] || 0.0) * (this.lap[i] || 0.0);
             }
         }
         return { real: out_re, imag: out_im };
@@ -380,8 +382,8 @@ export class SphericalHarmonicTransform {
         const out_im = new Float64Array(this.M * this.L);
         for (let i = 0; i < this.M * this.L; i++) {
             if (this.valid[i]) {
-                out_re[i] = a_re[i] * this.inv_lap[i];
-                out_im[i] = a_im[i] * this.inv_lap[i];
+                out_re[i] = (a_re[i] || 0.0) * (this.inv_lap[i] || 0.0);
+                out_im[i] = (a_im[i] || 0.0) * (this.inv_lap[i] || 0.0);
             }
         }
         out_re[0] = 0.0;
